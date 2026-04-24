@@ -1,0 +1,92 @@
+{
+  "engineering_triage": {
+    "description": "Optimized for engineering leads and technical reviewers who need defect visibility, code-quality reality, and prioritized remediation detail.",
+    "category_multipliers": {
+      "architecture_design": 1.15,
+      "code_quality_contracts": 1.15,
+      "testing_quality_gates": 1.1,
+      "security_posture": 1.1,
+      "dependency_release_hygiene": 1.0,
+      "documentation_truthfulness": 0.9,
+      "maintainability_operability": 1.1,
+      "reproducibility_research_rigor": 0.8
+    },
+    "narrative_emphasis": [
+      "technical debt",
+      "failure modes",
+      "code-level evidence",
+      "implementation priority"
+    ],
+    "remediation_depth": "high",
+    "pass_threshold": 70,
+    "distinction_threshold": 85
+  },
+  "vc_diligence": {
+    "description": "Optimized for investor-style diligence. Emphasizes technical credibility, overclaim detection, sustainability, and downside risk.",
+    "category_multipliers": {
+      "architecture_design": 1.05,
+      "code_quality_contracts": 1.0,
+      "testing_quality_gates": 1.05,
+      "security_posture": 1.2,
+      "dependency_release_hygiene": 1.15,
+      "documentation_truthfulness": 1.25,
+      "maintainability_operability": 1.05,
+      "reproducibility_research_rigor": 0.85
+    },
+    "narrative_emphasis": [
+      "credibility",
+      "technical moat support",
+      "execution maturity",
+      "risk concentration",
+      "overclaim detection"
+    ],
+    "remediation_depth": "medium",
+    "pass_threshold": 72,
+    "distinction_threshold": 88
+  },
+  "acquisition_diligence": {
+    "description": "Optimized for acquisition or integration review. Emphasizes maintainability, dependency risk, portability, release hygiene, and operational integration risk.",
+    "category_multipliers": {
+      "architecture_design": 1.1,
+      "code_quality_contracts": 1.05,
+      "testing_quality_gates": 1.1,
+      "security_posture": 1.15,
+      "dependency_release_hygiene": 1.2,
+      "documentation_truthfulness": 1.05,
+      "maintainability_operability": 1.15,
+      "reproducibility_research_rigor": 0.7
+    },
+    "narrative_emphasis": [
+      "integration risk",
+      "maintenance burden",
+      "release hygiene",
+      "dependency concentration",
+      "knowledge transfer risk"
+    ],
+    "remediation_depth": "medium",
+    "pass_threshold": 74,
+    "distinction_threshold": 88
+  },
+  "remediation_agent": {
+    "description": "Optimized for an AI coding assistant or structured fix plan. Emphasizes actionable findings, stable anchors, and verification commands.",
+    "category_multipliers": {
+      "architecture_design": 1.0,
+      "code_quality_contracts": 1.15,
+      "testing_quality_gates": 1.15,
+      "security_posture": 1.2,
+      "dependency_release_hygiene": 1.05,
+      "documentation_truthfulness": 0.9,
+      "maintainability_operability": 1.1,
+      "reproducibility_research_rigor": 0.75
+    },
+    "narrative_emphasis": [
+      "task order",
+      "verification",
+      "patch safety",
+      "expected score lift"
+    ],
+    "remediation_depth": "very_high",
+    "pass_threshold": 70,
+    "distinction_threshold": 85
+  }
+}
