@@ -108,5 +108,13 @@
       "limited unsafe shortcuts",
       "reasonable maintenance path"
     ]
+  },
+  "unknown": {
+    "description": "Fallback profile when no archetype could be inferred. Applies neutral overrides — every category retains its maturity-driven applicability.",
+    "applicability_overrides": {},
+    "expectations": [
+      "infer archetype manually via --repo-type",
+      "treat scoring as advisory until classification is confirmed"
+    ]
   }
 }
