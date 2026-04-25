@@ -17,7 +17,7 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from sdlc_assessor.detectors.common import iter_repo_files
 from sdlc_assessor.normalizer.findings import build_score_impact
@@ -89,12 +89,13 @@ def _get_parser_and_language(language: str) -> tuple[Any, Any] | None:
     except Exception:
         return None
     try:
-        # tree-sitter-language-pack types the language argument as a
-        # ``Literal[...]`` of all 300+ supported languages. We accept only
-        # the languages we register in our packs (``go``, ``rust``,
-        # ``typescript``, ``tsx``, ``javascript``, ``python``), so the
-        # str→Literal narrowing is safe at this call site.
-        return get_parser(language), get_language(language)  # type: ignore[arg-type]
+        # tree-sitter-language-pack types ``language`` as a
+        # ``Literal[...]`` of 300+ supported languages. We accept only the
+        # six we register in our packs, so the narrowing is safe; cast to
+        # ``Any`` so the call site is portable across versions of the
+        # package (some releases ship the literal, others don't).
+        lang_arg = cast(Any, language)
+        return get_parser(lang_arg), get_language(lang_arg)
     except Exception:
         return None
 
