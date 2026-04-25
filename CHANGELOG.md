@@ -12,12 +12,36 @@ Nothing yet — see Roadmap below.
 
 - Language packs for Go, Rust, Java, C#, Kotlin
 - Real SAST integration (`semgrep`, `bandit`, `eslint`, `cargo-audit`) feeding the common schema
-- Dependency graph extraction from `requirements.txt`, `package-lock.json`, `Cargo.lock`
-- Git-history detectors (commit signing, CODEOWNERS coverage, bus-factor)
 - `sdlc compare repo_a repo_b` mode
 - HTML renderer in addition to Markdown
 - Remote profile distribution (signed packs)
 - LLM-backed category narratives via the Anthropic API (deterministic path stays default)
+
+## [0.3.0] - 2026-04-25
+
+First Phase-8 milestone: dependency-graph extraction and git-history detectors. Both ship without new external tooling; both extend the schema with optional fields so v0.2.0 outputs remain valid.
+
+### Added
+
+- **SDLC-036: dependency graph extractor.** `sdlc_assessor/collector/dependencies.py` parses `requirements*.txt`, `pyproject.toml [project.dependencies]/[optional-dependencies]/[tool.poetry...]`, `package.json`, `Cargo.toml`, and `go.mod`, plus detects 10 lockfile formats. Output lands at `inventory.dependency_graph = {runtime, dev, lockfiles, total_packages}` per the new `dependency_entry` schema definition.
+- **Three new dependency-hygiene findings** (`sdlc_assessor/detectors/dependency_hygiene.py`):
+  - `lockfile_missing` (medium, `dependency_release_hygiene`) — manifest declares deps but no lockfile present for the relevant ecosystem.
+  - `excessive_runtime_deps` (low, `dependency_release_hygiene`) — runtime deps exceed the soft threshold (default 50).
+  - `no_dependabot_or_renovate` (low, `dependency_release_hygiene`) — no `.github/dependabot.yml` or `renovate.json` despite declared dependencies.
+- **SDLC-037: git-history detectors.** `sdlc_assessor/detectors/git_history.py` shells to `git log` (with hard timeout, no shell expansion, tolerant of missing `git`) over the last 100 commits.
+- **Optional `repo_meta.git_summary`** — populated by the classifier when the target is a git checkout. Carries `commits_analyzed`, `signed_commit_count`, `signing_coverage`, `bus_factor`, `top_authors`, `codeowners_present`, `codeowners_coverage`.
+- **Three new git-history findings**:
+  - `unsigned_commits` (medium, `security_posture`) — signing coverage < 20% with at least 5 commits in the window.
+  - `bus_factor_low` (high if 1, medium if 2–3, `architecture_design`) — author concentration over the analyzed window.
+  - `missing_codeowners` (low, `architecture_design`) — no `CODEOWNERS` file at any conventional path.
+- **Default-branch detection** — classifier now reads `.git/HEAD` to populate `repo_meta.default_branch` instead of hardcoding `"unknown"`.
+- **Schema extensions**: `inventory.dependency_graph`, `repo_meta.git_summary`, `$defs.dependency_entry`. All optional, so v0.2.0-shaped payloads still validate.
+- **Registry**: `dependency_hygiene` and `git_history` join the existing 3 detector packs.
+- **Tests**: 20 new tests across `test_dependencies.py` (12) and `test_git_history.py` (8 — guarded by `pytest.mark.skipif` if `git` is absent).
+
+### Changed
+
+- Collector inventory now uses the structured graph for `runtime_dependencies` / `dev_dependencies` counts (was a brittle pyproject regex). Coverage extends to npm/cargo/go/poetry projects, not just `[project] dependencies`.
 
 ## [0.2.0] - 2026-04-25
 
