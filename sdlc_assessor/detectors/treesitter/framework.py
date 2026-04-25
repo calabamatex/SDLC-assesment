@@ -89,7 +89,12 @@ def _get_parser_and_language(language: str) -> tuple[Any, Any] | None:
     except Exception:
         return None
     try:
-        return get_parser(language), get_language(language)
+        # tree-sitter-language-pack types the language argument as a
+        # ``Literal[...]`` of all 300+ supported languages. We accept only
+        # the languages we register in our packs (``go``, ``rust``,
+        # ``typescript``, ``tsx``, ``javascript``, ``python``), so the
+        # str→Literal narrowing is safe at this call site.
+        return get_parser(language), get_language(language)  # type: ignore[arg-type]
     except Exception:
         return None
 
