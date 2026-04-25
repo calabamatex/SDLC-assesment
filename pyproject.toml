@@ -29,8 +29,11 @@ sdlc = "sdlc_assessor.cli:main"
 
 [project.optional-dependencies]
 treesitter = [
-    "tree-sitter>=0.25",
-    "tree-sitter-language-pack>=1.5",
+    # Pinned: tree-sitter-language-pack 1.6.3 ships transitive deps
+    # (`librt`, `python-discovery`) that fail to import on CI. 1.6.2 is
+    # the last known-clean release. Loosen once the packaging regresses.
+    "tree-sitter>=0.25,<0.26",
+    "tree-sitter-language-pack==1.6.2",
 ]
 dev = [
     "pytest>=8.0",
@@ -42,8 +45,8 @@ dev = [
     "pyyaml>=6.0",
     "json5>=0.9",
     "pre-commit>=3.7",
-    "tree-sitter>=0.25",
-    "tree-sitter-language-pack>=1.5",
+    "tree-sitter>=0.25,<0.26",
+    "tree-sitter-language-pack==1.6.2",
 ]
 
 [tool.setuptools.packages.find]
