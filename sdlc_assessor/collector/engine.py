@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 from pathlib import Path
 
+from sdlc_assessor.collector.dependencies import extract_dependency_graph
 from sdlc_assessor.core.io import read_json
 from sdlc_assessor.detectors.common import iter_repo_files
 from sdlc_assessor.detectors.registry import DetectorRegistry
@@ -68,18 +69,9 @@ def _inventory(repo_path: Path) -> dict:
             except OSError:
                 pass
 
-    runtime_dependencies = 0
-    dev_dependencies = 0
-    pyproject = repo_path / "pyproject.toml"
-    if pyproject.exists():
-        try:
-            text = pyproject.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            text = ""
-        runtime_dependencies = len(_dep_block(text, "dependencies"))
-        dev_dependencies = sum(
-            1 for line in text.splitlines() if line.lstrip().startswith("\"") and "[project.optional-dependencies]" not in line
-        )
+    dependency_graph = extract_dependency_graph(repo_path)
+    runtime_dependencies = len(dependency_graph.get("runtime", []))
+    dev_dependencies = len(dependency_graph.get("dev", []))
 
     largest.sort(key=lambda t: -t[1])
     largest_files = [{"path": p, "bytes": s} for p, s in largest[:5]]
@@ -97,19 +89,8 @@ def _inventory(repo_path: Path) -> dict:
         "runtime_dependencies": runtime_dependencies,
         "dev_dependencies": dev_dependencies,
         "largest_files": largest_files,
+        "dependency_graph": dependency_graph,
     }
-
-
-def _dep_block(text: str, key: str) -> list[str]:
-    """Heuristic: extract entries from ``key = [ ... ]`` in a pyproject."""
-    import re
-
-    pattern = re.compile(rf"^\s*{re.escape(key)}\s*=\s*\[([^\]]*)\]", re.MULTILINE | re.DOTALL)
-    match = pattern.search(text)
-    if not match:
-        return []
-    body = match.group(1)
-    return [line.strip().strip(",").strip('"').strip("'") for line in body.splitlines() if line.strip().startswith(("'", '"'))]
 
 
 def collect_evidence(repo_target: str, classification_path: str) -> dict:

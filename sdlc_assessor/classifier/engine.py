@@ -387,12 +387,35 @@ def classify_repo(repo_target: str) -> dict:
 
     result = _detect(repo_path)
 
+    repo_meta: dict = {
+        "name": repo_path.name,
+        "default_branch": _detect_default_branch(repo_path),
+        "analysis_timestamp": datetime.now(UTC).isoformat(),
+    }
+
+    # SDLC-037: optional git_summary lives under repo_meta when the target
+    # is a git checkout. Imported lazily so a non-git target never pays the
+    # subprocess cost.
+    from sdlc_assessor.detectors.git_history import collect_git_summary
+
+    git_summary = collect_git_summary(repo_path)
+    if git_summary is not None:
+        repo_meta["git_summary"] = git_summary
+
     payload = {
-        "repo_meta": {
-            "name": repo_path.name,
-            "default_branch": "unknown",
-            "analysis_timestamp": datetime.now(UTC).isoformat(),
-        },
+        "repo_meta": repo_meta,
         "classification": asdict(result),
     }
     return payload
+
+
+def _detect_default_branch(repo_path: Path) -> str:
+    """Best-effort default-branch detection via git refs."""
+    head = repo_path / ".git" / "HEAD"
+    try:
+        text = head.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return "unknown"
+    if text.startswith("ref: refs/heads/"):
+        return text.replace("ref: refs/heads/", "").strip() or "unknown"
+    return "unknown"

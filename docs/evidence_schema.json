@@ -66,6 +66,61 @@
               }
             }
           }
+        },
+        "git_summary": {
+          "type": "object",
+          "description": "Optional summary of git history signals (SDLC-037). Populated when the assessed repo has a .git directory.",
+          "properties": {
+            "commits_analyzed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "signed_commit_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "signing_coverage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "bus_factor": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "top_authors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "commit_count"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "commit_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "share": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            },
+            "codeowners_present": {
+              "type": "boolean"
+            },
+            "codeowners_coverage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
         }
       }
     },
@@ -200,6 +255,56 @@
                 "type": "integer",
                 "minimum": 0
               }
+            }
+          }
+        },
+        "dependency_graph": {
+          "type": "object",
+          "description": "Optional structured dependency inventory (SDLC-036).",
+          "properties": {
+            "runtime": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/dependency_entry"
+              }
+            },
+            "dev": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/dependency_entry"
+              }
+            },
+            "lockfiles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "ecosystem"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "ecosystem": {
+                    "type": "string",
+                    "enum": [
+                      "pip",
+                      "poetry",
+                      "uv",
+                      "npm",
+                      "yarn",
+                      "pnpm",
+                      "cargo",
+                      "go"
+                    ]
+                  }
+                }
+              }
+            },
+            "total_packages": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         }
@@ -479,6 +584,39 @@
           "type": "string"
         },
         "compare_against": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dependency_entry": {
+      "type": "object",
+      "required": [
+        "name",
+        "ecosystem"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version_constraint": {
+          "type": "string"
+        },
+        "ecosystem": {
+          "type": "string",
+          "enum": [
+            "pip",
+            "poetry",
+            "uv",
+            "npm",
+            "yarn",
+            "pnpm",
+            "cargo",
+            "go"
+          ]
+        },
+        "source_manifest": {
           "type": "string"
         }
       }

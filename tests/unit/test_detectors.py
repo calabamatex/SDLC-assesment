@@ -4,9 +4,15 @@ from sdlc_assessor.detectors.registry import DetectorRegistry
 from sdlc_assessor.detectors.tsjs_pack import run_tsjs_detectors
 
 
-def test_detectors_registry_lists_phase3_detectors() -> None:
+def test_detectors_registry_lists_registered_detectors() -> None:
     registry = DetectorRegistry()
-    assert registry.registered() == ["common", "python_pack", "tsjs_pack"]
+    assert registry.registered() == [
+        "common",
+        "python_pack",
+        "tsjs_pack",
+        "dependency_hygiene",
+        "git_history",
+    ]
 
 
 def test_detectors_find_probable_secret_fixture_signal() -> None:
