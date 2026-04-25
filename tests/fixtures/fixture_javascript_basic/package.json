@@ -1,0 +1,7 @@
+{
+  "name": "fixture-javascript-basic",
+  "version": "0.1.0",
+  "description": "Pure-JS fixture for the SDLC assessor.",
+  "main": "index.js",
+  "private": true
+}

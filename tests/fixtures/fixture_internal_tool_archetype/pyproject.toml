@@ -1,0 +1,3 @@
+[project]
+name = "internal-tool"
+description = "Has pyproject but no name+version pair (no version field)."
