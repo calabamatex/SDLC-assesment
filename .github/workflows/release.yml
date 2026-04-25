@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  # PyPI publishing is intentionally not enabled here. To turn it on:
+  # 1. Register the project on PyPI and configure a trusted publisher pointing at this workflow.
+  # 2. Add `id-token: write` to permissions and a publish job using
+  #    `pypa/gh-action-pypi-publish@release/v1`.
+
+jobs:
+  build-and-release:
+    name: build wheel + sdist, attach to GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build prerequisites
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+          pip install -e ".[dev]"
+
+      - name: Run tests as a release gate
+        run: pytest -q
+
+      - name: Validate calibration
+        run: python scripts/calibration_check.py
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Verify schema sync
+        run: python scripts/check_schema_sync.py
+
+      - name: Attach artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

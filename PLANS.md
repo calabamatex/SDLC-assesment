@@ -25,55 +25,100 @@ Docs in `docs/` are the source of truth.
 
 ---
 
-## Final project structure (v1)
+## Final project structure (v1, as built)
+
 ```text
 sdlc-assessor/
   PLANS.md
   pyproject.toml
   README.md
+  CHANGELOG.md
+  CONTRIBUTING.md
+  SECURITY.md
+  LICENSE
+  .pre-commit-config.yaml
+  .github/
+    workflows/
+      ci.yml
+      release.yml
   docs/
+    SDLC_Framework_v2_Spec.md
+    scoring_engine_spec.md
+    remediation_planner_spec.md
+    renderer_template.md
+    detector_pack_starter_spec.md
+    evidence_schema.json
+    calibration_targets.md
 
-  src/sdlc_assessor/
-    cli.py
+  sdlc_assessor/                 # flat layout (no src/), per pyproject.toml
+    __init__.py                  # __version__ exposed
+    cli.py                       # `run` is inlined here, not in pipeline/run_single.py
     core/
-      models.py
-      schema.py
+      __init__.py                # re-exports load_evidence_schema, validate_evidence_full
+      schema.py                  # package-local-first schema resolution
       io.py
+      models.py
       enums.py
+      evidence_schema.json       # byte-equal copy of docs/evidence_schema.json
     profiles/
-      loader.py
-      merger.py
+      loader.py                  # use_case × maturity × repo_type loader
       data/
         use_case_profiles.json
         maturity_profiles.json
         repo_type_profiles.json
     classifier/
-      engine.py
+      engine.py                  # real archetype/network/maturity inference (SDLC-016)
     collector/
       engine.py
     detectors/
       registry.py
-      common.py
-      python_pack.py
-      tsjs_pack.py
+      common.py                  # single-pass walker, ignore-dirs, pathspec
+      python_pack.py             # ast-based (SDLC-019)
+      tsjs_pack.py               # regex with boundaries + tsconfig extends chain (SDLC-020)
+    normalizer/
+      findings.py                # severity → magnitude mapping
     scorer/
-      engine.py
+      engine.py                  # category_scores as list, int overall_score, summaries
       precedence.py
-      blockers.py
+      blockers.py                # 6 blocker rules per scoring_engine_spec
+      policy.py
     renderer/
-      markdown.py
+      markdown.py                # 11-section template (SDLC-023)
     remediation/
-      planner.py
-      markdown.py
-    pipeline/
-      run_single.py
+      planner.py                 # subcategory→change_type/phase mapping (SDLC-024)
+      markdown.py                # phase-grouped, nested-list rendering (SDLC-025)
+
+  scripts/
+    benchmark_calibration.py
+    calibration_check.py         # CI gate for fixture score bands
+    check_schema_sync.py         # CI gate for evidence_schema.json equality
 
   tests/
+    conftest.py                  # `classification_json_path` shared fixture
     unit/
-    integration/
-    fixtures/
+      test_classifier.py
+      test_cli.py
+      test_collector_evidence.py
+      test_core_schema.py
+      test_detectors.py
+      test_phase8_policy.py
+      test_profiles_loader.py
+      test_remediation.py
+      test_schema_conformance.py
+      test_scorer_blockers.py
+      test_version_sync.py
     golden/
+      test_report_render.py
+    fixtures/                    # 15 fixture repos (see scripts/calibration_check.py)
 ```
+
+Differences from the original plan:
+
+- **No `src/` prefix.** The `pyproject.toml` `[tool.setuptools.packages.find]` now points at the flat `sdlc_assessor/` directory and works from a fresh clone.
+- **No `pipeline/run_single.py`.** The `run` subcommand is inlined directly in `cli.py` because the orchestration was small enough to live next to argument parsing.
+- **No `profiles/merger.py`.** Profile merge is performed inline by `scorer/precedence.py::build_effective_profile` plus `scorer/policy.py`.
+- **Profile JSONs are not duplicated.** They live only at `sdlc_assessor/profiles/data/`. The `docs/` copies were removed (SDLC-018).
+- **Schema lives in two places by design.** `docs/evidence_schema.json` is the human-edited canonical copy; `sdlc_assessor/core/evidence_schema.json` is shipped in the wheel. `scripts/check_schema_sync.py` enforces byte equality.
 
 ---
 
@@ -395,3 +440,7 @@ Done when all are true:
 6. Remediation tasks follow the exact schema.
 7. Fixture repos run successfully.
 8. Tests pass locally.
+
+## Post-v0.1 status
+
+The v0.2.0 remediation effort (tasks SDLC-001..035) is captured in [`CHANGELOG.md`](CHANGELOG.md) under `[0.2.0] - Unreleased`. It addresses every issue identified in the analysis report by [ACTION_PLAN.md](https://github.com/calabamatex/SDLC-assesment) and grounds each fix in a verification command. The original v1 specification above is preserved verbatim for historical reference; for current behaviour, defer to `CHANGELOG.md`, the docs in `docs/`, and the live source.
