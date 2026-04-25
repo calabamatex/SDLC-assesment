@@ -52,19 +52,26 @@ class TreeSitterRule:
 
 
 def _ensure_deps() -> bool:
-    """Return True when tree-sitter is importable; warn once on miss."""
+    """Return True when tree-sitter is importable; warn once on miss.
+
+    Some tree-sitter-language-pack releases raise non-ImportError exceptions
+    at import time (binary loader issues on certain libc versions, missing
+    grammar entry points, etc.). We catch broadly and surface the *actual*
+    exception in the warning so the CI diagnosis isn't a guessing game.
+    """
     global _DEPS_AVAILABLE, _WARNED
     if _DEPS_AVAILABLE is not None:
         return _DEPS_AVAILABLE
     try:
         import tree_sitter  # noqa: F401
         import tree_sitter_language_pack  # noqa: F401
-    except ImportError:
+    except Exception as exc:  # ImportError, OSError, RuntimeError, etc.
         if not _WARNED:
             warnings.warn(
-                "tree-sitter or tree-sitter-language-pack is not installed; "
-                "language packs (Go, Rust, TS/JS) are disabled. "
-                "Install the [treesitter] or [dev] extra to enable them.",
+                f"tree-sitter or tree-sitter-language-pack failed to import "
+                f"({type(exc).__name__}: {exc}); language packs (Go, Rust, "
+                f"TS/JS) are disabled. Install the [treesitter] or [dev] "
+                f"extra to enable them.",
                 stacklevel=2,
             )
             _WARNED = True
@@ -79,11 +86,11 @@ def _get_parser_and_language(language: str) -> tuple[Any, Any] | None:
         return None
     try:
         from tree_sitter_language_pack import get_language, get_parser
-    except ImportError:
+    except Exception:
         return None
     try:
         return get_parser(language), get_language(language)
-    except (KeyError, ValueError, RuntimeError):
+    except Exception:
         return None
 
 
