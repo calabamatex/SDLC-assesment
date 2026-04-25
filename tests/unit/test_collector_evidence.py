@@ -1,11 +1,13 @@
+from pathlib import Path
+
 from sdlc_assessor.collector.engine import collect_evidence
 from sdlc_assessor.detectors.registry import DetectorRegistry
 
 
-def test_collector_assembles_evidence_shape() -> None:
+def test_collector_assembles_evidence_shape(classification_json_path: Path) -> None:
     evidence = collect_evidence(
         "tests/fixtures/fixture_python_basic",
-        ".sdlc/classification.json",
+        str(classification_json_path),
     )
     assert set(evidence.keys()) == {
         "repo_meta",
@@ -17,10 +19,10 @@ def test_collector_assembles_evidence_shape() -> None:
     }
 
 
-def test_collector_inventory_has_non_negative_core_fields() -> None:
+def test_collector_inventory_has_non_negative_core_fields(classification_json_path: Path) -> None:
     evidence = collect_evidence(
         "tests/fixtures/fixture_python_basic",
-        ".sdlc/classification.json",
+        str(classification_json_path),
     )
     inv = evidence["inventory"]
     assert inv["source_files"] >= 1
