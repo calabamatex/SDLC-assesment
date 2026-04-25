@@ -16,7 +16,14 @@ runs the appropriate set per file extension.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sdlc_assessor.detectors.treesitter.framework import TreeSitterRule
+
+
+def _is_empty_block(node: Any) -> bool:
+    """A ``statement_block`` node with no statements (named children)."""
+    return getattr(node, "named_child_count", 0) == 0
 
 JS_SUFFIXES = (".js", ".jsx", ".mjs", ".cjs")
 TS_SUFFIXES = (".ts",)
@@ -32,11 +39,14 @@ def _shared_rules(*, allow_jsx: bool) -> list[TreeSitterRule]:
             category="code_quality_contracts",
             statement="Empty `catch` block detected — error swallowed.",
             rationale="An empty catch block silently absorbs failures; rethrow or log + degrade explicitly.",
+            # The regex predicate `#match?` behaves inconsistently across
+            # grammar versions for whitespace-only bodies; use a Python
+            # post-filter instead, which directly inspects the AST node.
             query="""
-                ((catch_clause
-                    body: (statement_block) @body)
-                 (#match? @body "^\\\\{\\\\s*\\\\}$")) @match
+                (catch_clause
+                    body: (statement_block) @match)
             """,
+            post_filter=_is_empty_block,
         ),
         TreeSitterRule(
             subcategory="console_usage",

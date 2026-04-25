@@ -14,6 +14,7 @@ findings just don't surface.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,10 @@ class TreeSitterRule:
     ``query`` is a tree-sitter S-expression. The framework runs it against
     every parsed file and emits a finding when at least one capture matches
     ``primary_capture`` (default ``"match"``).
+
+    ``post_filter`` is an optional callable that receives each captured node
+    and returns ``True`` to keep it. Useful for rules where tree-sitter's
+    ``#match?`` predicate behaves inconsistently across grammar versions.
     """
 
     subcategory: str
@@ -43,6 +48,7 @@ class TreeSitterRule:
     rationale: str | None = None
     confidence: str = "high"
     tags: list[str] = field(default_factory=list)
+    post_filter: Callable[[Any], bool] | None = None
 
 
 def _ensure_deps() -> bool:
@@ -166,6 +172,10 @@ def run_treesitter_pack(
             primary_nodes = captures.get(rule.primary_capture)
             if not primary_nodes:
                 continue
+            if rule.post_filter is not None:
+                primary_nodes = [n for n in primary_nodes if rule.post_filter(n)]
+                if not primary_nodes:
+                    continue
             first = primary_nodes[0]
             line = first.start_point.row + 1
             snippet = _node_snippet(source_bytes, source_lines, first)
