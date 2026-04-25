@@ -13,8 +13,8 @@ This is `v0.1` — the scaffolding is in place and the CLI runs end-to-end, but 
 Requires Python 3.12+.
 
 ```bash
-git clone https://github.com/calabamatex/SDLC-assesment.git
-cd SDLC-assesment
+git clone https://github.com/calabamatex/sdlc-assessor.git
+cd sdlc-assessor
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"

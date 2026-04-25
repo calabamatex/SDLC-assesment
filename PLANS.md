@@ -443,4 +443,4 @@ Done when all are true:
 
 ## Post-v0.1 status
 
-The v0.2.0 remediation effort (tasks SDLC-001..035) is captured in [`CHANGELOG.md`](CHANGELOG.md) under `[0.2.0] - Unreleased`. It addresses every issue identified in the analysis report by [ACTION_PLAN.md](https://github.com/calabamatex/SDLC-assesment) and grounds each fix in a verification command. The original v1 specification above is preserved verbatim for historical reference; for current behaviour, defer to `CHANGELOG.md`, the docs in `docs/`, and the live source.
+The v0.2.0 remediation effort (tasks SDLC-001..035) is captured in [`CHANGELOG.md`](CHANGELOG.md) under `[0.2.0]`. It addresses every issue identified in the [analysis report](docs/ANALYSIS.md), driven by the [action plan](docs/ACTION_PLAN.md), and grounds each fix in a verification command. The original v1 specification above is preserved verbatim for historical reference; for current behaviour, defer to `CHANGELOG.md`, the docs in `docs/`, and the live source.

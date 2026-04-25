@@ -12,6 +12,12 @@ permissions:
   # 2. Add `id-token: write` to permissions and a publish job using
   #    `pypa/gh-action-pypi-publish@release/v1`.
 
+# Opt every action that bundles JavaScript into Node.js 24 (see ci.yml for
+# the rationale). Removes the deprecation warning that surfaced on the
+# v0.2.0 release run.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-and-release:
     name: build wheel + sdist, attach to GitHub Release

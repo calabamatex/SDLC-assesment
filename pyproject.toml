@@ -21,8 +21,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/calabamatex/SDLC-assesment"
-Issues = "https://github.com/calabamatex/SDLC-assesment/issues"
+Homepage = "https://github.com/calabamatex/sdlc-assessor"
+Issues = "https://github.com/calabamatex/sdlc-assessor/issues"
 
 [project.scripts]
 sdlc = "sdlc_assessor.cli:main"

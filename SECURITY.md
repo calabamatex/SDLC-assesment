@@ -18,7 +18,7 @@ If you find a security issue in `sdlc-assessor`, **do not file a public GitHub i
 - The version (`sdlc --version` output) and Python version
 - Any proof-of-concept code
 
-**Contact:** open a private security advisory via [GitHub Security Advisories](https://github.com/calabamatex/SDLC-assesment/security/advisories/new), or email `security@calabamatex` (replace with the project's actual security contact in your fork).
+**Contact:** open a private security advisory via [GitHub Security Advisories](https://github.com/calabamatex/sdlc-assessor/security/advisories/new), or email `security@calabamatex` (replace with the project's actual security contact in your fork).
 
 ## Disclosure timeline
 

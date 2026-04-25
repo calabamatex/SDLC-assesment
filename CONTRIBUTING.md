@@ -5,8 +5,8 @@ Thanks for your interest. This document covers the day-to-day mechanics: setup, 
 ## Setup
 
 ```bash
-git clone https://github.com/calabamatex/SDLC-assesment.git
-cd SDLC-assesment
+git clone https://github.com/calabamatex/sdlc-assessor.git
+cd sdlc-assessor
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
