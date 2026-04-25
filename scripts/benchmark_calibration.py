@@ -46,6 +46,10 @@ DEFAULT_PROFILES: list[tuple[str, str, str, str]] = [
     ("tests/fixtures/fixture_infrastructure_archetype", "engineering_triage", "prototype", "infrastructure"),
     ("tests/fixtures/fixture_internal_tool_archetype", "engineering_triage", "prototype", "internal_tool"),
     ("tests/fixtures/fixture_committed_credential", "engineering_triage", "production", "service"),
+    ("tests/fixtures/fixture_go_basic", "engineering_triage", "prototype", "library"),
+    ("tests/fixtures/fixture_go_panics", "engineering_triage", "production", "service"),
+    ("tests/fixtures/fixture_rust_basic", "engineering_triage", "prototype", "library"),
+    ("tests/fixtures/fixture_rust_unsafe", "engineering_triage", "production", "library"),
 ]
 
 

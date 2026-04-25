@@ -27,6 +27,10 @@ Use cases are fixed at `engineering_triage` for these bands.
 | `fixture_infrastructure_archetype` | prototype | infrastructure | 80 — 99 | pass_with_distinction / pass | 0 | 0 |
 | `fixture_internal_tool_archetype` | prototype | internal_tool | 80 — 99 | pass_with_distinction / pass | 0 | 0 |
 | `fixture_committed_credential` | production | service | 30 — 70 | conditional_pass / fail | ≥ 1 | — |
+| `fixture_go_basic` | prototype | library | 85 — 99 | pass_with_distinction / pass | 0 | 0 |
+| `fixture_go_panics` | production | service | 20 — 55 | conditional_pass / fail | ≥ 1 | — |
+| `fixture_rust_basic` | prototype | library | 85 — 99 | pass_with_distinction / pass | 0 | 0 |
+| `fixture_rust_unsafe` | production | library | 20 — 55 | conditional_pass / fail | ≥ 1 | — |
 
 ## How to update
 

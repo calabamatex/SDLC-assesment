@@ -60,6 +60,14 @@ TARGETS = [
      80, 99, {"pass_with_distinction", "pass"}, 0, 0),
     ("tests/fixtures/fixture_committed_credential", "engineering_triage", "production", "service",
      30, 70, {"conditional_pass", "fail"}, 1, None),
+    ("tests/fixtures/fixture_go_basic", "engineering_triage", "prototype", "library",
+     85, 99, {"pass_with_distinction", "pass"}, 0, 0),
+    ("tests/fixtures/fixture_go_panics", "engineering_triage", "production", "service",
+     20, 55, {"conditional_pass", "fail"}, 1, None),
+    ("tests/fixtures/fixture_rust_basic", "engineering_triage", "prototype", "library",
+     85, 99, {"pass_with_distinction", "pass"}, 0, 0),
+    ("tests/fixtures/fixture_rust_unsafe", "engineering_triage", "production", "library",
+     20, 55, {"conditional_pass", "fail"}, 1, None),
 ]
 
 

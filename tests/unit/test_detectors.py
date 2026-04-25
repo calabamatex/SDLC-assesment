@@ -1,7 +1,16 @@
 from pathlib import Path
 
+import pytest
+
 from sdlc_assessor.detectors.registry import DetectorRegistry
 from sdlc_assessor.detectors.tsjs_pack import run_tsjs_detectors
+
+_TS_DEPS_OK = True
+try:
+    import tree_sitter  # noqa: F401
+    import tree_sitter_language_pack  # noqa: F401
+except ImportError:
+    _TS_DEPS_OK = False
 
 
 def test_detectors_registry_lists_registered_detectors() -> None:
@@ -10,6 +19,8 @@ def test_detectors_registry_lists_registered_detectors() -> None:
         "common",
         "python_pack",
         "tsjs_pack",
+        "go_pack",
+        "rust_pack",
         "dependency_hygiene",
         "git_history",
     ]
@@ -201,3 +212,235 @@ def test_common_skips_files_above_max_size(tmp_path: Path) -> None:
     large = [f for f in findings if f["subcategory"] == "large_files"]
     assert large
     assert large[0]["evidence"][0]["path"].endswith("blob.bin")
+
+
+# SDLC-048: Python pack expansion (6 new subcategories).
+
+
+def _python_subcats_in(tmp_path: Path) -> set[str]:
+    from sdlc_assessor.detectors.python_pack import run_python_detectors
+
+    return {f["subcategory"] for f in run_python_detectors(tmp_path)}
+
+
+def test_python_eval_or_exec_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "x = eval('1+1')\nexec('y = 2')\n", encoding="utf-8"
+    )
+    assert "eval_or_exec" in _python_subcats_in(tmp_path)
+
+
+def test_python_eval_in_string_is_not_a_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        'doc = "use eval() carefully"\n', encoding="utf-8"
+    )
+    assert "eval_or_exec" not in _python_subcats_in(tmp_path)
+
+
+def test_python_pickle_loads_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "import pickle\npickle.loads(b'')\n", encoding="utf-8"
+    )
+    assert "pickle_load_untrusted" in _python_subcats_in(tmp_path)
+
+
+def test_python_os_system_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "import os\nos.system('ls')\n", encoding="utf-8"
+    )
+    assert "os_system_call" in _python_subcats_in(tmp_path)
+
+
+def test_python_requests_verify_false_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "import requests\nrequests.get('https://x', verify=False)\n",
+        encoding="utf-8",
+    )
+    assert "requests_verify_false" in _python_subcats_in(tmp_path)
+
+
+def test_python_mutable_default_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "def f(items=[]):\n    items.append(1)\n    return items\n",
+        encoding="utf-8",
+    )
+    assert "mutable_default_argument" in _python_subcats_in(tmp_path)
+
+
+def test_python_immutable_default_is_not_a_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "def f(items=None):\n    return items or []\n", encoding="utf-8"
+    )
+    assert "mutable_default_argument" not in _python_subcats_in(tmp_path)
+
+
+def test_python_unsafe_sql_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "def q(c, n):\n    c.execute('SELECT * WHERE n=' + n)\n",
+        encoding="utf-8",
+    )
+    assert "unsafe_sql_string" in _python_subcats_in(tmp_path)
+
+
+def test_python_parametrized_sql_is_not_a_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "def q(c, n):\n    c.execute('SELECT * WHERE n=?', (n,))\n",
+        encoding="utf-8",
+    )
+    assert "unsafe_sql_string" not in _python_subcats_in(tmp_path)
+
+
+def test_python_module_level_assert_finding(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text(
+        "X = 1\nassert X == 1\n", encoding="utf-8"
+    )
+    assert "module_level_assert" in _python_subcats_in(tmp_path)
+
+
+def test_python_assert_in_test_file_is_not_a_finding(tmp_path: Path) -> None:
+    (tmp_path / "test_something.py").write_text(
+        "X = 1\nassert X == 1\n", encoding="utf-8"
+    )
+    assert "module_level_assert" not in _python_subcats_in(tmp_path)
+
+
+# SDLC-044/045/046/047: tree-sitter framework + Go + Rust + TS/JS migration.
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_go_pack_detects_panic(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.go_pack import run_go_detectors
+
+    (tmp_path / "main.go").write_text(
+        'package main\nfunc f() { panic("x") }\n', encoding="utf-8"
+    )
+    findings = run_go_detectors(tmp_path)
+    assert "go_panic_call" in {f["subcategory"] for f in findings}
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_go_pack_detects_unsafe_pointer(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.go_pack import run_go_detectors
+
+    (tmp_path / "main.go").write_text(
+        'package main\nimport "unsafe"\nvar x int\nvar p = unsafe.Pointer(&x)\n',
+        encoding="utf-8",
+    )
+    assert "go_unsafe_pointer" in {f["subcategory"] for f in run_go_detectors(tmp_path)}
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_go_pack_detects_exec_command_shell(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.go_pack import run_go_detectors
+
+    (tmp_path / "main.go").write_text(
+        'package main\nimport "os/exec"\nfunc f() { exec.Command("sh", "-c", "ls") }\n',
+        encoding="utf-8",
+    )
+    assert "go_exec_command_shell" in {f["subcategory"] for f in run_go_detectors(tmp_path)}
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_go_pack_no_findings_on_clean_file(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.go_pack import run_go_detectors
+
+    (tmp_path / "main.go").write_text(
+        "package main\nfunc Add(a, b int) int { return a + b }\n", encoding="utf-8"
+    )
+    assert run_go_detectors(tmp_path) == []
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_rust_pack_detects_unsafe_block(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.rust_pack import run_rust_detectors
+
+    (tmp_path / "lib.rs").write_text(
+        "fn f() { unsafe { let _ = 1; } }\n", encoding="utf-8"
+    )
+    assert "rust_unsafe_block" in {f["subcategory"] for f in run_rust_detectors(tmp_path)}
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_rust_pack_detects_unwrap_and_expect(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.rust_pack import run_rust_detectors
+
+    (tmp_path / "lib.rs").write_text(
+        "fn f(x: Option<i32>) -> i32 { x.unwrap() }\n"
+        "fn g(x: Option<i32>) -> i32 { x.expect(\"ok\") }\n",
+        encoding="utf-8",
+    )
+    subcats = {f["subcategory"] for f in run_rust_detectors(tmp_path)}
+    assert "rust_unwrap_call" in subcats
+    assert "rust_expect_call" in subcats
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_rust_pack_detects_transmute(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.rust_pack import run_rust_detectors
+
+    (tmp_path / "lib.rs").write_text(
+        "fn f() { let _: u32 = unsafe { std::mem::transmute::<f32, u32>(1.0) }; }\n",
+        encoding="utf-8",
+    )
+    assert "rust_transmute_call" in {f["subcategory"] for f in run_rust_detectors(tmp_path)}
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_tsjs_treesitter_detects_eval_and_function_constructor(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.tsjs_pack import run_tsjs_detectors
+
+    (tmp_path / "x.js").write_text(
+        "eval('1');\nconst fn = new Function('return 1');\n", encoding="utf-8"
+    )
+    subcats = {f["subcategory"] for f in run_tsjs_detectors(tmp_path)}
+    assert "eval_usage" in subcats
+    assert "function_constructor" in subcats
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_tsjs_treesitter_detects_inner_html(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.tsjs_pack import run_tsjs_detectors
+
+    (tmp_path / "x.js").write_text("document.body.innerHTML = userInput;\n", encoding="utf-8")
+    assert "inner_html_assignment" in {f["subcategory"] for f in run_tsjs_detectors(tmp_path)}
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_tsjs_treesitter_detects_dangerously_set_inner_html(tmp_path: Path) -> None:
+    from sdlc_assessor.detectors.treesitter.tsjs_pack import run_tsjs_detectors
+
+    (tmp_path / "App.tsx").write_text(
+        'function A() { return <div dangerouslySetInnerHTML={{__html: ""}} />; }\n',
+        encoding="utf-8",
+    )
+    assert "dangerously_set_inner_html" in {f["subcategory"] for f in run_tsjs_detectors(tmp_path)}
+
+
+@pytest.mark.skipif(not _TS_DEPS_OK, reason="tree-sitter not installed")
+def test_tsjs_treesitter_preserves_v0_2_signals(tmp_path: Path) -> None:
+    """SDLC-047: existing as-any / console / empty-catch / exec / execSync still fire."""
+    from sdlc_assessor.detectors.treesitter.tsjs_pack import run_tsjs_detectors
+
+    (tmp_path / "x.ts").write_text(
+        "const v: any = (1 as any);\nconsole.log(v);\ntry { } catch {}\nexec('x');\nexecSync('y');\n",
+        encoding="utf-8",
+    )
+    subcats = {f["subcategory"] for f in run_tsjs_detectors(tmp_path)}
+    for required in ("as_any", "console_usage", "empty_catch", "exec_usage", "exec_sync_usage"):
+        assert required in subcats, f"missing {required}"
+
+
+def test_treesitter_framework_no_op_when_deps_missing(monkeypatch, tmp_path: Path) -> None:
+    """Framework must not crash when tree-sitter isn't installed."""
+    import sdlc_assessor.detectors.treesitter.framework as fw
+
+    monkeypatch.setattr(fw, "_DEPS_AVAILABLE", False)
+    (tmp_path / "main.go").write_text("package main\n", encoding="utf-8")
+    findings = fw.run_treesitter_pack(
+        tmp_path,
+        language="go",
+        suffixes=(".go",),
+        rules=[],
+        detector_source="x",
+    )
+    assert findings == []
