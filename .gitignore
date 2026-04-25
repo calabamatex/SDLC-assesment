@@ -1,5 +1,46 @@
+# Byte-compiled / runtime
 __pycache__/
 *.py[cod]
+*.so
+
+# Build / packaging artifacts
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+wheels/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test / type / lint caches
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.nox/
+
+# Virtual environments
 .venv/
+.venv-*/
+venv/
+env/
+
+# CLI working directory
 .sdlc/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db

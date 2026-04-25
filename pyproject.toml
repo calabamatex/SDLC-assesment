@@ -5,14 +5,72 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sdlc-assessor"
 version = "0.1.0"
-description = "CLI-first SDLC repository assessment framework"
+description = "Evidence-driven SDLC repository assessment framework"
+readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "calabamatex" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Homepage = "https://github.com/calabamatex/SDLC-assesment"
+Issues = "https://github.com/calabamatex/SDLC-assesment/issues"
 
 [project.scripts]
 sdlc = "sdlc_assessor.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "jsonschema>=4.20",
+    "mypy>=1.10",
+    "ruff>=0.5",
+    "pathspec>=0.12",
+    "pyyaml>=6.0",
+    "json5>=0.9",
+    "pre-commit>=3.7",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sdlc_assessor*"]
+exclude = ["tests*", "scripts*", "docs*"]
 
 [tool.setuptools.package-data]
 "sdlc_assessor.core" = ["evidence_schema.json"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/golden"]
+norecursedirs = ["tests/fixtures", ".git", ".venv*", "node_modules", "dist", "build"]
+filterwarnings = [
+    "ignore::DeprecationWarning:sdlc_assessor.*",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # function-call default args are intentional in a few places
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
