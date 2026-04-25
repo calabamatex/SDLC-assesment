@@ -6,7 +6,6 @@ from pathlib import Path
 
 from sdlc_assessor.core.io import read_json
 
-
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
