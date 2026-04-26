@@ -6,13 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet — see Roadmap below.
+The original Phase-8 backlog from `docs/ACTION_PLAN.md` is now fully closed. Future work would be net-new direction (v1.0 hardening, plugin system, web UI, etc.).
 
-### Roadmap (not yet implemented)
+### Roadmap (post-Phase-8 ideas)
 
-- HTML renderer in addition to Markdown
-- Remote profile distribution (signed packs)
-- LLM-backed category narratives via the Anthropic API (deterministic path stays default)
+- ed25519 signing for profile packs (replace HMAC v1 trust model with asymmetric crypto)
+- Web UI for browsing the report and remediation plan interactively
+- Plugin system for third-party detector packs without forking the repo
+- Streamed LLM narration (typewriter UX) instead of single-shot calls
+- Automatic dedupe family inference from finding statements (NLP-based grouping)
+
+## [0.8.0] - 2026-04-26
+
+Sixth and final Phase-8 milestone — closes the original action plan. Three independent capabilities round out the framework.
+
+### Added
+
+- **SDLC-064: HTML renderer.** New `sdlc_assessor/renderer/html.py` mirrors the Markdown renderer's 11 sections and produces a single-file `report.html` with an embedded CSS stylesheet (no external assets) and a vanilla-JS sortable findings table. All user-supplied content is HTML-escaped via `html.escape` to prevent XSS via finding statements. CLI: `render --format {markdown,html,both}` and `run --format {markdown,html,both}`. When `both`, `run` writes `report.md` AND `report.html` under the `--out-dir`.
+- **SDLC-065: Signed profile packs.** New `sdlc_assessor/profiles/packs.py` defines the v1 trust model: HMAC-SHA256 with pre-shared symmetric keys. Operators publish packs as a directory or `.zip` containing a `manifest.json` (with sha256 hashes per profile file), one or more profile JSONs, and a `signature.json`. Consumers verify against a trust file at `$SDLC_TRUST_FILE` or `~/.config/sdlc-assessor/trust.json` mapping `key_id → secret_hex`. Supports unsigned packs with a warning under `strict=False`. Includes `build_pack(...)` helper for operators. Future v2 trust model (ed25519, asymmetric) is documented but deferred.
+- **SDLC-066: LLM-backed category narratives.** New `sdlc_assessor/scorer/llm_narrator.py` — optional Anthropic-API-backed narrator that replaces the deterministic per-category summary with 2–5 sentence prose. Three independent activation gates (env var `ANTHROPIC_API_KEY`, `anthropic` SDK installed, `--narrate-with-llm` flag); any closed gate falls back silently to the deterministic narrator. Per-process LRU cache keyed on `(category, applicable, score, max_score, deduction_total, finding-fingerprint)`. New CLI flags `--narrate-with-llm` and `--llm-model` on `score` and `run`. New optional extra `[llm]` (Anthropic SDK ≥ 0.40). Default model: `claude-haiku-4-5-20251001`.
+- **35 new tests** across `test_html_renderer.py` (12), `test_profile_packs.py` (16), `test_llm_narrator.py` (7) — including XSS escaping verification, pack tampering detection, and an SDK-mocked end-to-end scorer integration.
+
+### Changed
+
+- `score_evidence` accepts new `use_llm_narrator` and `llm_model` keyword args. Default behaviour unchanged (deterministic narrator); the LLM path is fully opt-in.
+- `run` and `render` subcommands gain `--format` choice between `markdown` (default), `html`, or `both`.
+
+### Notes
+
+- HTML rendering is offline-only — no external CSS, no external JS, no analytics or fonts. Reports work in air-gapped environments.
+- Profile packs use symmetric crypto (HMAC-SHA256) for v1. The trust file IS the signing key; treat it like one. Future v2 will switch to ed25519 once a non-stdlib crypto dep is acceptable.
+- LLM narrator is deliberately opt-in. The deterministic narrator stays canonical for reproducibility, auditability, and offline use. The LLM path returns `None` on any failure — narratives are never load-bearing for the pipeline.
 
 ## [0.7.0] - 2026-04-26
 
