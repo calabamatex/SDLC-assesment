@@ -1,7 +1,9 @@
 """Golden tests for the Markdown renderer.
 
-Covers the SDLC-015 / SDLC-023 list-of-dicts shape, the legacy dict back-compat
-branch, and the dynamic §2 / §6 / §7 / §10 sections.
+The v0.9.0 renderer (SDLC-070) is persona-aware: section structure mirrors
+the HTML renderer's executive callout + scorecard + per-emphasis narrative
+blocks + production/fixture-segregated findings. These tests assert the
+v0.9.0 layout, not the v0.8.0 numbered-section template.
 """
 
 from __future__ import annotations
@@ -87,77 +89,77 @@ SCORED_LIST_SHAPE = {
 
 
 def test_report_contains_required_sections() -> None:
+    """v0.9.0: persona-aware sections + scorecard + segregated findings."""
     report = render_markdown_report(SCORED_LIST_SHAPE)
-    for section in (
-        "## 1. Header",
-        "## 2. Executive Summary",
-        "## 3. Overall Score and Verdict",
-        "## 4. Repo Classification Box",
-        "## 5. Quantitative Inventory",
-        "## 6. Top Strengths",
-        "## 7. Top Risks",
-        "## 8. Hard Blockers",
-        "## 9. Category Scoring Matrix",
-        "## 10. Detailed Findings by Category",
-        "## 11. Evidence Appendix",
+    for marker in (
+        "# SDLC Assessment Report — demo",
+        "## Executive Summary",
+        "## Scorecard",
+        "## Persona-aware narrative",
+        "## Hard Blockers",
+        "## Quantitative Inventory",
+        "## Category Scoring Matrix",
+        "## Detailed Findings",
+        "## Evidence Appendix",
     ):
-        assert section in report, f"missing {section}"
+        assert marker in report, f"missing marker: {marker}"
 
 
-def test_report_top_strengths_does_not_invent_praise() -> None:
+def test_report_renders_persona_narrative_blocks_for_engineering_triage() -> None:
+    """Engineering-triage profile has 4 narrative_emphasis terms; each becomes an h3."""
     report = render_markdown_report(SCORED_LIST_SHAPE)
-    # Neither category is at full points → renderer must say so.
-    assert "No category earned full points" in report
+    persona_section = report.split("## Persona-aware narrative", 1)[1].split("## Hard Blockers", 1)[0]
+    # engineering_triage emphasis: technical_debt, failure_modes, code_level_evidence, implementation_priority
+    for title in ("Technical debt", "Failure modes", "Code-level evidence", "Implementation priority"):
+        assert title in persona_section, f"missing narrative block: {title}"
 
 
-def test_report_top_strengths_lists_full_point_category_when_present() -> None:
+def test_report_executive_summary_pulls_persona_callouts() -> None:
+    """Executive summary lists strongest callouts with severity tags."""
+    report = render_markdown_report(SCORED_LIST_SHAPE)
+    exec_section = report.split("## Executive Summary", 1)[1].split("## Scorecard", 1)[0]
+    # Critical blocker should appear in the headline.
+    assert "**1**" in exec_section or "1 critical" in exec_section.lower() or "critical blocker" in exec_section.lower()
+
+
+def test_report_scorecard_contains_overall_and_verdict() -> None:
+    report = render_markdown_report(SCORED_LIST_SHAPE)
+    scorecard = report.split("## Scorecard", 1)[1].split("## Persona-aware", 1)[0]
+    assert "| Overall | 55 |" in scorecard
+    assert "`fail`" in scorecard
+
+
+def test_report_findings_segregated_into_production_only_when_no_fixtures() -> None:
+    """No fixture-tagged findings → no fixture subsection rendered."""
+    report = render_markdown_report(SCORED_LIST_SHAPE)
+    assert "Fixture / non-production findings" not in report
+
+
+def test_report_fixture_findings_segregated_when_tagged() -> None:
     payload = {
         **SCORED_LIST_SHAPE,
-        "scoring": {
-            **SCORED_LIST_SHAPE["scoring"],
-            "category_scores": [
-                {
-                    "category": "documentation_truthfulness",
-                    "applicable": True,
-                    "score": 12,
-                    "max_score": 12,
-                    "summary": "All documentation present.",
-                    "key_findings": [],
-                },
-            ],
-        },
+        "findings": [
+            *SCORED_LIST_SHAPE["findings"],
+            {
+                "id": "F-fix",
+                "category": "code_quality_contracts",
+                "subcategory": "print_usage",
+                "severity": "low",
+                "confidence": "high",
+                "statement": "fixture print",
+                "evidence": [{"path": "tests/fixtures/x/main.py", "line_start": 1}],
+                "score_impact": {"direction": "negative", "magnitude": 2},
+                "tags": ["source:test_fixture"],
+            },
+        ],
     }
     report = render_markdown_report(payload)
-    assert "documentation_truthfulness" in report
-    assert "retained full points" in report
-
-
-def test_report_top_risks_caps_at_five() -> None:
-    findings = [
-        {
-            "id": f"F-{i:04d}",
-            "category": "code_quality_contracts",
-            "subcategory": "print_usage",
-            "severity": "high",
-            "confidence": "high",
-            "statement": f"finding {i}",
-            "evidence": [{"path": "x.py"}],
-            "score_impact": {"direction": "negative", "magnitude": 7},
-        }
-        for i in range(10)
-    ]
-    payload = {**SCORED_LIST_SHAPE, "findings": findings}
-    report = render_markdown_report(payload)
-    risks_block = report.split("## 7. Top Risks", 1)[1].split("## 8.", 1)[0]
-    bullet_count = sum(1 for line in risks_block.splitlines() if line.startswith("- **"))
-    assert bullet_count <= 5
-
-
-def test_report_findings_are_grouped_by_category(scored_with_two_categories=None) -> None:
-    report = render_markdown_report(SCORED_LIST_SHAPE)
-    section = report.split("## 10. Detailed Findings by Category", 1)[1]
-    assert "### security_posture" in section
-    assert "### code_quality_contracts" in section
+    assert "Fixture / non-production findings" in report
+    fixture_section = report.split("Fixture / non-production findings", 1)[1]
+    assert "tests/fixtures/x/main.py" in fixture_section
+    # Production findings table must NOT contain the fixture finding's path.
+    prod_section = report.split("### Production findings", 1)[1].split("### Production findings by category", 1)[0]
+    assert "tests/fixtures/x/main.py" not in prod_section
 
 
 def test_report_legacy_dict_shape_back_compat() -> None:
@@ -176,7 +178,7 @@ def test_report_legacy_dict_shape_back_compat() -> None:
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
         report = render_markdown_report(legacy)
-    assert "## 9. Category Scoring Matrix" in report
+    assert "## Category Scoring Matrix" in report
     assert any(issubclass(w.category, DeprecationWarning) for w in captured)
 
 

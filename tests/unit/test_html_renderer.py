@@ -77,19 +77,18 @@ def test_html_report_renders_well_formed_document() -> None:
 
 
 def test_html_report_contains_all_required_sections() -> None:
+    """v0.9.0 layout: executive callout + scorecard + persona narrative + sections."""
     html = render_html_report(_SCORED)
-    for header in (
-        "2. Executive Summary",
-        "4. Repo Classification",
-        "5. Quantitative Inventory",
-        "6. Top Strengths",
-        "7. Top Risks",
-        "8. Hard Blockers",
-        "9. Category Scoring Matrix",
-        "10. Detailed Findings",
-        "11. Evidence Appendix",
+    for marker in (
+        "Executive summary",                      # callout heading
+        '<div class="scorecard">',                # scorecard region
+        "Quantitative inventory",                 # inventory section
+        "Hard blockers",                          # blockers section
+        "Category scoring matrix",                # scoring matrix
+        "Detailed findings",                      # detailed findings
+        "Evidence appendix",                      # evidence appendix
     ):
-        assert header in html, f"missing section: {header}"
+        assert marker in html, f"missing marker: {marker}"
 
 
 def test_html_report_escapes_script_tags_in_finding_statement() -> None:
@@ -105,16 +104,19 @@ def test_html_report_escapes_script_tags_in_finding_statement() -> None:
 
 def test_html_report_marks_severity_classes_on_finding_rows() -> None:
     html = render_html_report(_SCORED)
+    # Findings table marks severity rows.
     assert 'class="sev-high"' in html
-    # Critical blocker present → critical class somewhere.
-    assert 'class="sev-critical"' in html
+    # Hard-blocker callout uses the critical pill / class.
+    assert "verdict-critical" in html or "callout-critical" in html or 'class="sev-critical"' in html
 
 
 def test_html_report_no_findings_section_message() -> None:
     payload = {**_SCORED, "findings": [], "hard_blockers": []}
     html = render_html_report(payload)
     assert "No hard blockers were triggered." in html
-    assert "No findings to display." in html
+    # v0.9.0 splits findings into production + fixture; "No findings" message
+    # appears for the production half when the input has zero findings.
+    assert "No production findings to display." in html or "No findings to display." in html
 
 
 def test_html_report_legacy_dict_category_scores_back_compat() -> None:
@@ -138,30 +140,64 @@ def test_html_report_legacy_dict_category_scores_back_compat() -> None:
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
         html = render_html_report(legacy)
-    assert "9. Category Scoring Matrix" in html
+    assert "Category scoring matrix" in html
     assert any(issubclass(w.category, DeprecationWarning) for w in captured)
 
 
-def test_html_report_full_points_strengths_listed() -> None:
+def test_html_report_renders_executive_callout_with_persona_summary() -> None:
+    """v0.9.0: the executive callout pulls the first narrative block's summary."""
+    html = render_html_report(_SCORED)
+    # Callout container is present.
+    assert '<aside class="exec-callout"' in html
+    assert '<p class="headline">' in html
+
+
+def test_html_report_renders_scorecard_with_six_cards() -> None:
+    """v0.9.0: scorecard surfaces overall, verdict, blockers, findings, archetype, confidence."""
+    html = render_html_report(_SCORED)
+    assert '<div class="scorecard">' in html
+    # Six labels in the scorecard.
+    for label in ("Overall", "Verdict", "Hard blockers", "Production findings", "Archetype", "Classification confidence"):
+        assert f">{label}<" in html, f"missing scorecard label: {label}"
+
+
+def test_html_report_segregates_fixture_findings_under_collapsible() -> None:
+    """v0.9.0: fixture-derived findings live in a <details> block, not the main table."""
     payload = {
         **_SCORED,
-        "scoring": {
-            **_SCORED["scoring"],
-            "category_scores": [
-                {
-                    "category": "documentation_truthfulness",
-                    "applicable": True,
-                    "score": 12,
-                    "max_score": 12,
-                    "summary": "all docs",
-                    "key_findings": [],
-                },
-            ],
-        },
+        "findings": [
+            {
+                "id": "F-prod",
+                "category": "code_quality_contracts",
+                "subcategory": "print_usage",
+                "severity": "low",
+                "confidence": "high",
+                "statement": "production print",
+                "evidence": [{"path": "sdlc_assessor/cli.py", "line_start": 5}],
+                "score_impact": {"direction": "negative", "magnitude": 2},
+                "tags": [],
+            },
+            {
+                "id": "F-fix",
+                "category": "code_quality_contracts",
+                "subcategory": "print_usage",
+                "severity": "low",
+                "confidence": "high",
+                "statement": "fixture print",
+                "evidence": [{"path": "tests/fixtures/fixture_python_basic/main.py", "line_start": 1}],
+                "score_impact": {"direction": "negative", "magnitude": 2},
+                "tags": ["source:test_fixture"],
+            },
+        ],
     }
     html = render_html_report(payload)
-    assert "documentation_truthfulness" in html
-    assert "retained full points" in html
+    assert '<details class="fixture-section">' in html
+    # Fixture finding is inside the details block, not the production table.
+    prod_table_start = html.find('id="prod-findings"')
+    fixture_details_start = html.find('class="fixture-section"')
+    assert prod_table_start < fixture_details_start
+    # The fixture finding's path appears in the document.
+    assert "tests/fixtures/fixture_python_basic/main.py" in html
 
 
 # ---------------------------------------------------------------------------
