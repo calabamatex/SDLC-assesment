@@ -34,7 +34,11 @@ from datetime import UTC, datetime
 
 from sdlc_assessor.normalizer.findings import is_fixture_finding
 from sdlc_assessor.profiles.loader import load_use_case_profiles
-from sdlc_assessor.renderer.deliverables import Deliverable, build_deliverable
+from sdlc_assessor.renderer.deliverables import (
+    Deliverable,
+    ProvenanceHeader,
+    build_deliverable,
+)
 from sdlc_assessor.renderer.deliverables.base import RecommendationOption
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
@@ -261,6 +265,48 @@ section.kind-prose, section.kind-facts { margin-bottom: 1rem; }
 .both-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.4rem 0 1.4rem; }
 .both-grid .col { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); padding: 1rem 1.1rem; }
 .both-grid .col h4 { margin-top: 0; color: var(--accent); }
+
+/* 0.11.0 depth pass: provenance banner — pinned identity at the very top */
+.provenance {
+  background: var(--bg-alt); border-bottom: 1px solid var(--rule-strong);
+  padding: 1rem 1.6rem; font-family: var(--sans); font-size: 0.92rem;
+  position: sticky; top: 0; z-index: 100;
+}
+.prov-row { max-width: 980px; margin: 0 auto; }
+.prov-identity {
+  display: flex; gap: 1.6rem; align-items: baseline; flex-wrap: wrap;
+  padding-bottom: 0.6rem;
+}
+.prov-identity > div { display: flex; flex-direction: column; }
+.prov-label {
+  font-size: 0.72rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.prov-value { font-weight: 600; color: var(--ink); }
+.prov-project-name { font-size: 1.18rem; }
+.prov-source a { color: var(--accent); text-decoration: none; }
+.prov-source a:hover { text-decoration: underline; }
+.prov-source .muted-mono { font-family: var(--mono); font-size: 0.84em; color: var(--muted); }
+.persona-badge {
+  display: inline-block; background: var(--accent); color: var(--accent-fg, white);
+  padding: 0.18rem 0.7rem; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.prov-meta { padding-top: 0.5rem; border-top: 1px dashed var(--rule); }
+.prov-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.3rem 1.4rem; margin: 0;
+}
+.prov-grid dt { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.3rem; }
+.prov-grid dd { margin: 0; font-weight: 600; color: var(--ink); font-size: 0.88rem; }
+.prov-grid code { font-family: var(--mono); font-size: 0.84em; }
+@media print {
+  .provenance { position: static; page-break-after: avoid; border-bottom: 1px solid #000; }
+}
+@media (max-width: 720px) {
+  .provenance { position: static; }
+  .prov-identity { flex-direction: column; gap: 0.5rem; }
+}
 
 /* 0.11.0 depth pass: exec summary, methodology, decomposition, gap, glossary, citations */
 .exec-summary {
@@ -817,6 +863,95 @@ def _render_persona_blocks(deliverable: Deliverable, *, narrator: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _render_provenance_header(deliverable: Deliverable) -> str:
+    """0.11.0: pinned identity banner. Names what's being diligenced.
+
+    User feedback (rightly): a diligence document that doesn't name its
+    subject is unauditable. This banner shows project name, repo URL,
+    commit SHA, scan timestamp, scorer version, classifier output, and
+    inventory snapshot. Pinned at the top of every report.
+    """
+    p = deliverable.provenance
+    if p is None:
+        return ""
+
+    if p.source_kind == "git_remote" and p.source_location.startswith(("http://", "https://")):
+        location_html = (
+            f'<a href="{_esc(p.source_location)}" target="_blank" rel="noopener">'
+            f"{_esc(p.source_location)}</a>"
+        )
+    else:
+        location_html = (
+            f'<span class="muted-mono">{_esc(p.source_location)}'
+            f'{" · no git origin" if p.source_kind == "local_path" else ""}</span>'
+        )
+
+    commit_block = ""
+    if p.commit_sha:
+        branch_text = f" ({_esc(p.branch)})" if p.branch else ""
+        commit_block = (
+            f'<dt>Commit</dt>'
+            f'<dd><code>{_esc(p.commit_sha)}</code>{branch_text}</dd>'
+        )
+
+    cls = p.classifier or {}
+    archetype = cls.get("repo_archetype") or "unknown"
+    maturity = cls.get("maturity_profile") or "unknown"
+    network = "internet-facing" if cls.get("network_exposure") else "internal-only"
+    confidence = cls.get("classification_confidence")
+    confidence_text = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "n/a"
+
+    inv = p.inventory_snapshot or {}
+    inventory_pairs = [
+        ("Source files", inv.get("source_files", "n/a")),
+        ("Source LOC", inv.get("source_loc", "n/a")),
+        ("Test files", inv.get("test_files", "n/a")),
+        ("Workflow files", inv.get("workflow_files", "n/a")),
+        ("Runtime deps", inv.get("runtime_dependencies", "n/a")),
+    ]
+    inventory_html = "".join(
+        f'<dt>{_esc(label)}</dt><dd><code>{_esc(value)}</code></dd>'
+        for label, value in inventory_pairs
+    )
+
+    return f"""
+<aside class="provenance" aria-label="Report provenance">
+  <div class="prov-row prov-identity">
+    <div class="prov-project">
+      <span class="prov-label">Subject</span>
+      <span class="prov-value prov-project-name">{_esc(p.project_name)}</span>
+    </div>
+    <div class="prov-source">
+      <span class="prov-label">Source</span>
+      <span class="prov-value">{location_html}</span>
+    </div>
+    <div class="prov-persona">
+      <span class="prov-label">Report for</span>
+      <span class="prov-value persona-badge">{_esc(deliverable.use_case.replace('_', ' '))}</span>
+    </div>
+  </div>
+  <div class="prov-row prov-meta">
+    <dl class="prov-grid">
+      {commit_block}
+      <dt>Scanned</dt>
+      <dd><code>{_esc(p.scanned_at)}</code></dd>
+      <dt>Scorer</dt>
+      <dd><code>sdlc_assessor v{_esc(p.scorer_version)}</code></dd>
+      <dt>Archetype</dt>
+      <dd><code>{_esc(archetype)}</code></dd>
+      <dt>Maturity</dt>
+      <dd><code>{_esc(maturity)}</code></dd>
+      <dt>Surface</dt>
+      <dd>{_esc(network)}</dd>
+      <dt>Classifier confidence</dt>
+      <dd><code>{_esc(confidence_text)}</code></dd>
+      {inventory_html}
+    </dl>
+  </div>
+</aside>
+"""
+
+
 def _render_executive_summary(deliverable: Deliverable) -> str:
     """0.11.0 depth pass: prose exec summary with inline footnote markers."""
     if not deliverable.executive_summary:
@@ -1069,19 +1204,21 @@ def render_deliverable_html(
 
     Document order (0.11.0):
 
-    1. Cover (existing)
-    2. Executive summary (NEW — prose with inline footnote markers)
-    3. Methodology (NEW — formula + threshold + multipliers + verdict rules)
-    4. Score decomposition (NEW — per-category arithmetic)
-    5. Gap analysis (NEW — gap-to-pass + closing phases as projections)
-    6. Body sections (existing — radar, risk matrix, persona narrative blocks)
-    7. Recommendation block (existing)
-    8. Glossary (NEW)
-    9. Citations (NEW)
-    10. Engineering appendix (existing — finding listings)
-    11. Footer
+    1. Provenance banner (NEW — names the subject: project name, URL, commit, scanned-at, classifier output)
+    2. Cover (existing)
+    3. Executive summary (NEW — prose with inline footnote markers)
+    4. Methodology (NEW — formula + threshold + multipliers + verdict rules)
+    5. Score decomposition (NEW — per-category arithmetic)
+    6. Gap analysis (NEW — gap-to-pass + closing phases as projections)
+    7. Body sections (existing — radar, risk matrix, persona narrative blocks)
+    8. Recommendation block (existing)
+    9. Glossary (NEW)
+    10. Citations (NEW)
+    11. Engineering appendix (existing — finding listings)
+    12. Footer
     """
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    provenance_html = _render_provenance_header(deliverable)
     cover_html = _render_cover(deliverable, generated_at=generated_at)
     exec_summary_html = _render_executive_summary(deliverable)
     methodology_html = _render_methodology(deliverable)
@@ -1106,6 +1243,7 @@ def render_deliverable_html(
   <style>{_STYLESHEET}</style>
 </head>
 <body>
+  {provenance_html}
   <main class="doc">
     {cover_html}
     {exec_summary_html}
@@ -1132,12 +1270,18 @@ def render_html_report(
     *,
     narrator: str = "deterministic",
     title: str | None = None,
+    provenance: ProvenanceHeader | None = None,
 ) -> str:
     """Top-level HTML renderer used by the CLI ``render`` and ``run`` commands.
 
     Resolves the use-case profile from ``scored.scoring.effective_profile``
     and routes to the persona-distinct deliverable builder. Falls back to
     the generic deliverable shape when the use-case is unknown.
+
+    ``provenance`` is the report's identity / scan-context header. The CLI
+    builds it via :func:`sdlc_assessor.renderer.deliverables._provenance.collect_provenance`
+    and threads it through here. When ``None``, the provenance banner is
+    omitted (older callers stay working).
     """
     use_case = (
         ((scored.get("scoring") or {}).get("effective_profile") or {}).get("use_case")
@@ -1145,6 +1289,8 @@ def render_html_report(
     )
     profile = _resolve_use_case_profile(use_case) or {"use_case": use_case}
     deliverable = build_deliverable(scored, profile)
+    if provenance is not None:
+        deliverable.provenance = provenance
     return render_deliverable_html(
         deliverable, scored=scored, narrator=narrator, title=title
     )
