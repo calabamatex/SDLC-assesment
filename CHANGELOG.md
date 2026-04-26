@@ -10,12 +10,38 @@ Nothing yet — see Roadmap below.
 
 ### Roadmap (not yet implemented)
 
-- Language packs for Java, C#, Kotlin (framework now exists; cheap follow-up via tree-sitter rule files)
-- Real SAST integration (`semgrep`, `bandit`, `eslint`, `cargo-audit`) feeding the common schema as an additive layer
+- Language packs for Java, C#, Kotlin (framework exists; cheap follow-up via tree-sitter rule files)
+- `cargo-audit` SAST adapter for Rust dependency CVEs
 - `sdlc compare repo_a repo_b` mode
 - HTML renderer in addition to Markdown
 - Remote profile distribution (signed packs)
 - LLM-backed category narratives via the Anthropic API (deterministic path stays default)
+- Cross-detector dedupe — when both a native pack and a SAST adapter flag the same line, current behaviour is to emit both findings; a future pass can collapse them
+
+## [0.5.0] - 2026-04-26
+
+Third Phase-8 milestone: real SAST integration. Native packs continue to provide opinionated AST-driven signal; SAST adapters layer on industry-standard tools as an additive surface. Together: native packs detect what we have *opinions* about; SAST adapters catch breadth we don't want to maintain ourselves.
+
+### Added
+
+- **SDLC-050: SAST adapter framework.** `sdlc_assessor/detectors/sast/framework.py` introduces a base `SASTAdapter` class. Each adapter declares its `tool_name`, `ecosystems`, `build_command`, and `parse_output`; the framework handles availability detection (graceful no-op when the tool isn't on PATH), subprocess discipline (argument-array invocation, hard timeout, captured I/O, tolerated non-zero exits), schema mapping, and an opt-in cache (`SDLC_SAST_CACHE=1` keys results on `(tool_name, version, repo-state hash)` under `.sdlc/sast-cache/`).
+- **SDLC-051: bandit adapter** — Python security scanner. `bandit -r <repo> -f json`. Maps bandit's HIGH/MEDIUM/LOW severity + confidence to our schema. Each finding tagged with `bandit_<test_id>` and CWE.
+- **SDLC-052: ruff adapter** — Python linter (covers SAST-grade rules under the `S` flake8-bandit subset, `B` bugbear, `F` pyflakes). `ruff check . --output-format=json --exit-zero --no-cache`. Severity inferred from rule prefix.
+- **SDLC-053: eslint adapter** — JS/TS/JSX/TSX. `eslint . --format=json`. `should_run` requires an actual ESLint config in the repo; without one ESLint emits "no config" errors rather than findings, so we skip cleanly. `no-eval` and similar rule names route to `security_posture`.
+- **SDLC-054: semgrep adapter** — multi-language. `semgrep scan --json --config=auto --metrics=off`. Results' `extra.metadata.category` decides whether the finding lands in `security_posture` or `code_quality_contracts`.
+- Registry adds `sast` to its detector list; `run_sast_adapters()` is dispatched after the native packs.
+- 16 new tests in `tests/unit/test_sast.py` covering each adapter's parse layer (mocked JSON), framework graceful-degrade paths (missing tool, wrong ecosystem, timeout, raised exceptions), and one real-binary integration test guarded by `pytest.mark.skipif(shutil.which("ruff") is None)`.
+
+### Changed
+
+- Detector pack count: 7 → 8 (`sast` joins the existing 7).
+- `dev` and new `sast` extras pull in `bandit`, `semgrep`, and `eslint`-adjacent runtimes — but they remain opt-in. Default `pip install` doesn't pull them.
+- A bad SAST adapter can no longer break the pipeline: `run_sast_adapters` wraps each adapter in a broad exception handler and surfaces the failure as a one-shot warning.
+
+### Notes
+
+- Findings from native packs and SAST adapters are emitted side-by-side. Same line, same issue can produce two findings. Cross-detector dedupe is intentionally deferred — it's value-additive but not load-bearing for v0.5.0.
+- Tool installs have meaningful disk weight (semgrep ~150 MB, eslint depends on Node tooling). The framework's "no-op when not installed" path means nothing breaks for users who only have a subset.
 
 ## [0.4.0] - 2026-04-25
 
