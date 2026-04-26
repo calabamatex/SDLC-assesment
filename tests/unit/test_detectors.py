@@ -23,6 +23,7 @@ def test_detectors_registry_lists_registered_detectors() -> None:
         "rust_pack",
         "dependency_hygiene",
         "git_history",
+        "sast",
     ]
 
 
