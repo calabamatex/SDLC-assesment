@@ -186,6 +186,30 @@ class GlossaryEntry:
 
 
 @dataclass(slots=True)
+class ProvenanceHeader:
+    """Identity + scan-context for the report's subject.
+
+    Pinned at the top of every rendered report so the reader knows
+    *what* was scanned, *where* it lives, *which commit*, *when*, and
+    *with which scorer*. Without this, a diligence document is
+    unauditable.
+    """
+
+    project_name: str  # e.g. "AgentSentry"
+    source_location: str  # e.g. "https://github.com/calabamatex/AgentSentry"
+    source_kind: str  # "git_remote" | "local_path" | "explicit"
+    commit_sha: str | None  # short or full SHA at scan time, None if not a git checkout
+    branch: str | None
+    scanned_at: str  # ISO 8601 UTC
+    scorer_version: str  # sdlc_assessor.__version__
+    classifier: dict = field(default_factory=dict)
+    # ↑ {repo_archetype, maturity_profile, network_exposure, classification_confidence,
+    #    deployment_surface, release_surface}
+    inventory_snapshot: dict = field(default_factory=dict)
+    # ↑ {source_files, source_loc, test_files, workflow_files, runtime_dependencies, ...}
+
+
+@dataclass(slots=True)
 class MethodologyNote:
     """Renders as the methodology sidebar / box.
 
@@ -310,6 +334,8 @@ class Deliverable:
     citations: list[Citation] = field(default_factory=list)
     executive_summary: list[str] = field(default_factory=list)  # 3–4 prose paragraphs
     economic_frame: dict | None = None  # persona-specific structure (holdback / tranche / sprint / manifest)
+    provenance: ProvenanceHeader | None = None  # pinned identity / scan-context block
+    persona_findings: list[dict] = field(default_factory=list)  # persona-prioritized finding list
 
 
 def deliverable_to_dict(d: Deliverable) -> dict:
@@ -549,6 +575,7 @@ __all__ = [
     "GapAnalysis",
     "GlossaryEntry",
     "MethodologyNote",
+    "ProvenanceHeader",
     "Recommendation",
     "RecommendationOption",
     "RecommendationVerdict",

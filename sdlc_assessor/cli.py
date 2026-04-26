@@ -14,6 +14,7 @@ from sdlc_assessor.core.io import read_json, write_json
 from sdlc_assessor.remediation.markdown import render_remediation_markdown
 from sdlc_assessor.remediation.planner import build_remediation_plan
 from sdlc_assessor.renderer.deliverable_html import render_html_report
+from sdlc_assessor.renderer.deliverables._provenance import collect_provenance
 from sdlc_assessor.renderer.markdown import render_markdown_report
 from sdlc_assessor.scorer.engine import score_evidence
 
@@ -111,6 +112,23 @@ def build_parser() -> argparse.ArgumentParser:
             "Claude-authored prose. `both` renders the two side-by-side. `llm` and `both` "
             "require ANTHROPIC_API_KEY; both gracefully fall back to deterministic when the "
             "key is absent."
+        ),
+    )
+    run.add_argument(
+        "--repo-name",
+        default=None,
+        help=(
+            "Project name shown in the report's provenance banner. Defaults to the basename "
+            "of <repo_target> or the repo name parsed from the git origin URL."
+        ),
+    )
+    run.add_argument(
+        "--repo-url",
+        default=None,
+        help=(
+            "Project source URL shown in the report's provenance banner. Defaults to the git "
+            "origin URL when <repo_target> is a git checkout, otherwise 'local path: <abs>' "
+            "with explicit 'no git origin' disclosure."
         ),
     )
 
@@ -286,11 +304,18 @@ def main(argv: list[str] | None = None) -> int:
         write_json(scored_path, scored)
 
         narrator = getattr(args, "narrator", "deterministic")
+        provenance = collect_provenance(
+            repo_path=args.repo_target,
+            scored=scored,
+            project_name_override=getattr(args, "repo_name", None),
+            project_url_override=getattr(args, "repo_url", None),
+        )
         if args.format in ("markdown", "both"):
             (out_dir / "report.md").write_text(render_markdown_report(scored), encoding="utf-8")
         if args.format in ("html", "both"):
             (out_dir / "report.html").write_text(
-                render_html_report(scored, narrator=narrator), encoding="utf-8"
+                render_html_report(scored, narrator=narrator, provenance=provenance),
+                encoding="utf-8",
             )
 
         remediation_md = render_remediation_markdown(remediation)

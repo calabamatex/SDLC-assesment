@@ -230,6 +230,71 @@ def test_projection_disclosure_present_when_phases_have_lifts(rendered_reports: 
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Provenance header (0.11.0 — "reports must name their subject")
+# ---------------------------------------------------------------------------
+
+
+def test_provenance_banner_present_in_every_report(rendered_reports: dict[str, str]) -> None:
+    """Every report must carry the provenance banner."""
+    for use_case, html in rendered_reports.items():
+        assert 'class="provenance"' in html, f"{use_case} missing provenance banner"
+        assert 'aria-label="Report provenance"' in html, f"{use_case} provenance banner missing aria-label"
+
+
+def test_provenance_names_the_project(rendered_reports: dict[str, str]) -> None:
+    """The project name must appear as a literal string in the banner.
+
+    For the test fixture, the project name is the directory name
+    'fixture_committed_credential' (no git origin).
+    """
+    for use_case, html in rendered_reports.items():
+        assert "fixture_committed_credential" in html, (
+            f"{use_case} provenance does not name the project"
+        )
+
+
+def test_provenance_discloses_local_path_when_no_git_origin(rendered_reports: dict[str, str]) -> None:
+    """Reports of non-git inputs must explicitly say 'no git origin', not fabricate one."""
+    for use_case, html in rendered_reports.items():
+        # The fixture is not a git repo; provenance must say so.
+        assert "local path:" in html or "no git origin" in html, (
+            f"{use_case} provenance fabricates a source for a non-git input"
+        )
+
+
+def test_provenance_shows_scan_timestamp(rendered_reports: dict[str, str]) -> None:
+    """Reports must show when they were scanned (UTC, not paraphrase)."""
+    for use_case, html in rendered_reports.items():
+        assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC", html), (
+            f"{use_case} provenance missing scan timestamp"
+        )
+
+
+def test_provenance_shows_persona_badge(rendered_reports: dict[str, str]) -> None:
+    """The persona badge must surface the use-case so the reader never forgets the version."""
+    expected_badges = {
+        "acquisition_diligence": "acquisition diligence",
+        "vc_diligence": "vc diligence",
+        "engineering_triage": "engineering triage",
+        "remediation_agent": "remediation agent",
+    }
+    for use_case, html in rendered_reports.items():
+        badge_text = expected_badges[use_case]
+        assert f'persona-badge">{badge_text}' in html, (
+            f"{use_case} missing persona badge for '{badge_text}'"
+        )
+
+
+def test_provenance_shows_classifier_output(rendered_reports: dict[str, str]) -> None:
+    """Archetype / maturity / surface must appear in the provenance metadata grid."""
+    for use_case, html in rendered_reports.items():
+        for label in ("Archetype", "Maturity", "Surface", "Scorer"):
+            assert f"<dt>{label}</dt>" in html, (
+                f"{use_case} provenance grid missing field: {label}"
+            )
+
+
 def test_no_full_paragraph_appears_identically_across_personas(
     rendered_reports: dict[str, str],
 ) -> None:
