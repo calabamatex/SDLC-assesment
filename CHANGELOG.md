@@ -6,15 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-The original Phase-8 backlog from `docs/ACTION_PLAN.md` is now fully closed. Future work would be net-new direction (v1.0 hardening, plugin system, web UI, etc.).
-
-### Roadmap (post-Phase-8 ideas)
+### Roadmap (post-v0.9.0 ideas)
 
 - ed25519 signing for profile packs (replace HMAC v1 trust model with asymmetric crypto)
 - Web UI for browsing the report and remediation plan interactively
 - Plugin system for third-party detector packs without forking the repo
 - Streamed LLM narration (typewriter UX) instead of single-shot calls
 - Automatic dedupe family inference from finding statements (NLP-based grouping)
+- Per-emphasis builder customisation via plugin entry-points (let downstream profiles ship their own narrative-block builders)
+
+## [0.9.0] - 2026-04-26
+
+Persona-aware, business-focused reports. Closes a v0.8.0 shortcut where both the Markdown and HTML renderers used a single generic 11-section template regardless of the chosen `--use-case`, ignoring every profile's declared `narrative_emphasis`. v0.9.0 makes the report shape persona-driven.
+
+### Added
+
+- **SDLC-067: Path-class tagging.** New `sdlc_assessor.normalizer.findings.classify_path` and `is_fixture_finding` helpers. `normalize_findings` now tags every finding's primary path against a small set of non-production roots (`tests/fixtures/`, `examples/`, `vendor/`, `third_party/`, `docs/`, `benchmark/`) and emits `tags: ["source:<class>"]` accordingly. Findings without a tag are production source.
+- **SDLC-068: Persona narrative dispatch.** New `sdlc_assessor/renderer/persona.py` with `NarrativeBlock`/`NarrativeFact`/`NarrativeCallout` dataclasses and a `narrate_for_persona(scored, use_case_profile)` entry point. Builders register against `narrative_emphasis` terms; unknown terms fall through to a generic block grounded in the strongest production findings.
+- **`sdlc_assessor/renderer/narrative_blocks.py`** — 18 builders, one per `narrative_emphasis` term across the four shipped use-case profiles:
+  - `acquisition_diligence`: integration_risk, maintenance_burden, release_hygiene, dependency_concentration, knowledge_transfer_risk
+  - `vc_diligence`: credibility, technical_moat_support, execution_maturity, risk_concentration, overclaim_detection
+  - `engineering_triage`: technical_debt, failure_modes, code_level_evidence, implementation_priority
+  - `remediation_agent`: task_order, verification, patch_safety, expected_score_lift
+- **SDLC-069: HTML layout overhaul.** `sdlc_assessor/renderer/html.py` rewritten:
+  - Header band with profile triple + branch + analysis time
+  - Executive callout (lede paragraph + top-4 cross-block callouts ranked by severity)
+  - Scorecard grid (overall, verdict pill, blocker counts split by severity, production vs fixture finding counts, archetype, classification confidence)
+  - Persona-aware narrative section (one block per emphasis term, with facts table + severity-coloured callouts)
+  - Hard-blocker pre-action panel
+  - Quantitative inventory + category scoring matrix + sortable findings table
+  - **Fixture-derived findings collapsed under a `<details>` block** so they stop crowding the production view
+  - Print stylesheet that reflows for A4
+- **SDLC-070: Markdown renderer rewrite.** `sdlc_assessor/renderer/markdown.py` renamed sections to `Executive Summary`, `Scorecard`, `Persona-aware narrative — <use_case>`, `Hard Blockers`, `Quantitative Inventory`, `Category Scoring Matrix`, `Detailed Findings` (split into Production findings / Production findings by category / Fixture findings (segregated)), and `Evidence Appendix`. Same data layout as the HTML — one persona narrative drives both.
+- **31 new tests** across `test_persona.py` (path tagging, dispatch, builder content sanity), `test_html_renderer.py` (executive callout, scorecard, fixture segregation), and rewritten `tests/golden/test_report_render.py` for the v0.9.0 Markdown layout.
+
+### Changed
+
+- **Reports are no longer use-case-agnostic.** The same scored payload now produces materially different content for `acquisition_diligence` vs `vc_diligence` vs `engineering_triage` vs `remediation_agent`, because each use-case profile's `narrative_emphasis` drives which narrative blocks render and what the executive summary leads with.
+- **Fixture-derived findings are visibly segregated** in both Markdown and HTML reports. Previously, findings from `tests/fixtures/` (with planted bad code) were dumped into the same list as production findings, making the report misleading at a glance. Now they live in a labelled subsection / collapsible details block, with explicit copy explaining the distinction.
+- The v0.8.0 generic 11-section template (`## 2. Executive Summary`, `## 6. Top Strengths`, etc.) is replaced by the persona-aware structure described above. Section headings have changed; consumers parsing report Markdown by literal section name will need updates.
+
+### Notes
+
+- Persona narrative blocks are deterministic — every fact is pulled from the scored payload. The LLM narrator (SDLC-066) still substitutes per-category summaries when `--narrate-with-llm` is active; the persona blocks remain deterministic regardless.
+- `expected_score_lift` block reuses the existing remediation planner (`build_remediation_plan`) to compute the projected post-remediation score — a single source of truth for the lift estimate across the report and the remediation plan.
 
 ## [0.8.0] - 2026-04-26
 
