@@ -7,12 +7,19 @@ dispatcher in :mod:`sdlc_assessor.renderer.deliverables.base`.
 from __future__ import annotations
 
 from sdlc_assessor.renderer.deliverables.base import (
+    CategoryArithmetic,
+    Citation,
+    CostFrame,
     CoverPage,
     Deliverable,
     EngineeringAppendix,
+    GapAnalysis,
+    GlossaryEntry,
+    MethodologyNote,
     Recommendation,
     RecommendationOption,
     RecommendationVerdict,
+    ScoreDecomposition,
     Section,
     SectionFact,
     build_deliverable,
@@ -28,12 +35,19 @@ from sdlc_assessor.renderer.deliverables import (  # noqa: F401  — registers b
 )
 
 __all__ = [
+    "CategoryArithmetic",
+    "Citation",
+    "CostFrame",
     "CoverPage",
     "Deliverable",
     "EngineeringAppendix",
+    "GapAnalysis",
+    "GlossaryEntry",
+    "MethodologyNote",
     "Recommendation",
     "RecommendationOption",
     "RecommendationVerdict",
+    "ScoreDecomposition",
     "Section",
     "SectionFact",
     "build_deliverable",

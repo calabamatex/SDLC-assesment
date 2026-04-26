@@ -75,6 +75,132 @@ class CoverPage:
     classification_line: str = ""  # "Service · production maturity · networked"
 
 
+# ---------------------------------------------------------------------------
+# 0.11.0 depth-pass dataclasses (SDLC-081..087)
+#
+# These types support the depth pass that addresses the user's feedback that
+# the v0.10.0 reports talk *around* numbers without showing them. Each new
+# section of the report (executive summary prose, methodology box, score
+# decomposition table, gap analysis, cost frame, glossary, citations) maps
+# to one of the dataclasses below.
+#
+# Plan reference: /Users/ethanallen/.claude/plans/users-ethanallen-...md,
+# Phase 0 (0.11.0 depth pass), Section A.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class Citation:
+    """A claim → evidence pointer for the in-prose superscript footnotes.
+
+    ``claim_id`` is a stable string (e.g. ``"score_below_bar"``) so
+    builders can cite the same claim in the executive summary and the
+    methodology box and have the renderer resolve them to the same
+    footnote number.
+    """
+
+    claim_id: str
+    text: str
+    evidence_refs: list[str] = field(default_factory=list)  # ["scoring.overall_score=59", ...]
+    source_files: list[tuple[str, int | None]] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class CategoryArithmetic:
+    """One row in the score-decomposition table.
+
+    Reconstructs ``earned = base_max × multiplier × applicability − Σ deductions``
+    so the reader can audit how the 12/20 (etc.) actually got there.
+    """
+
+    category: str
+    label: str  # persona-relabelled (from PersonaVocab.category_labels)
+    base_max: int  # from BASE_WEIGHTS in scorer.engine
+    multiplier: float  # use-case category_multiplier
+    applicability: str  # "applicable" | "partial" | "not_applicable"
+    earned: float
+    deductions: list[dict] = field(default_factory=list)  # [{finding_id, severity_w, conf_mult, magnitude, deduction}, ...]
+    normalized_weight: int = 0  # rounded post-multiplier weight out of the persona's total weighted_max
+
+
+@dataclass(slots=True)
+class ScoreDecomposition:
+    """Full score arithmetic surfaced to the reader.
+
+    Carries every multiplier and weight the scoring engine applied so
+    nothing in the report has to handwave at "the diligence bar."
+    """
+
+    overall: int
+    pass_threshold: int
+    distinction_threshold: int
+    threshold_source: str  # "use_case_profiles.json:acquisition_diligence.pass_threshold"
+    flat_penalties: list[tuple[str, int]] = field(default_factory=list)  # [("missing_tests", 15), ...]
+    confidence_multiplier_table: dict[str, float] = field(default_factory=dict)
+    severity_weight_table: dict[str, int] = field(default_factory=dict)
+    maturity_factor: float = 1.0
+    categories: list[CategoryArithmetic] = field(default_factory=list)
+    score_confidence: str | None = None  # the scoring.score_confidence value ("low"|"medium"|"high")
+    score_confidence_rationale: str = ""
+
+
+@dataclass(slots=True)
+class GapAnalysis:
+    """Numeric distance to pass + concrete phases that close it."""
+
+    gap_to_pass: int  # max(0, pass_threshold - overall)
+    gap_to_distinction: int  # max(0, distinction_threshold - overall)
+    closing_phases: list[dict] = field(default_factory=list)
+    # ↑ [{phase: "phase_1_security", task_count: 6, projected_lift: 33.5, after: 92.5, clears: True}]
+    minimum_phases_to_pass: list[str] = field(default_factory=list)
+    on_call_delta_if_unfixed: str = ""  # engineering persona only; explanatory line
+
+
+@dataclass(slots=True)
+class CostFrame:
+    """Engineer-day (and optional dollar) cost per task and per phase.
+
+    Built from ``remediation_plan.tasks[].effort`` and the editorial
+    :data:`EFFORT_TO_DAYS` table in :mod:`._cost`. The ``$`` column is
+    suppressed at render time when ``blended_engineer_day_rate_usd`` is
+    ``None``.
+    """
+
+    blended_engineer_day_rate_usd: int | None
+    effort_to_engineer_days: dict[str, tuple[float, float]] = field(default_factory=dict)
+    per_task_cost: list[dict] = field(default_factory=list)
+    # ↑ [{task_id, effort, low_days, high_days, low_usd, high_usd}, ...]
+    per_phase_cost: list[dict] = field(default_factory=list)
+    total_low_days: float = 0.0
+    total_high_days: float = 0.0
+
+
+@dataclass(slots=True)
+class GlossaryEntry:
+    """One reader-facing definition rendered in the back-of-doc glossary."""
+
+    term: str
+    short_def: str  # 1-line for tooltip / superscript hover
+    long_def: str  # paragraph for appendix
+    sources: list[str] = field(default_factory=list)  # ["sdlc_assessor/profiles/data/use_case_profiles.json", ...]
+
+
+@dataclass(slots=True)
+class MethodologyNote:
+    """Renders as the methodology sidebar / box.
+
+    Names the bar, the formula, the multiplier composition, and the
+    verdict-rule table. Cites every claim so the reader can audit.
+    """
+
+    score_formula: str  # readable math, plain monospace
+    threshold_explanation: str
+    multiplier_explanation: str
+    verdict_rule_table: list[dict] = field(default_factory=list)
+    # ↑ [{score_band: "≥distinction", critical: 0, high: 0, verdict: "proceed"}, ...]
+    calibration_band: str | None = None  # matched against docs/calibration_targets.md, or None
+
+
 @dataclass(slots=True)
 class SectionFact:
     """A small key/value pair rendered as a metric strip or definition list."""
@@ -159,6 +285,12 @@ class Deliverable:
     The four use-cases each emit a different ``kind`` and a different
     ordered list of sections. Renderers (HTML, Markdown, JSON) consume
     the same shape.
+
+    The 0.11.0 depth-pass fields (``score_decomposition``, ``gap``,
+    ``cost_frame``, ``methodology``, ``glossary``, ``citations``,
+    ``executive_summary``, ``economic_frame``) are populated by builders
+    so the reader can audit every threshold, rule, and cost claim. They
+    default to ``None`` / empty so 0.10.0-shape consumers keep working.
     """
 
     use_case: str
@@ -168,6 +300,16 @@ class Deliverable:
     recommendation: Recommendation | None = None
     appendix: EngineeringAppendix = field(default_factory=EngineeringAppendix)
     persona_blocks: list[NarrativeBlock] = field(default_factory=list)
+
+    # 0.11.0 depth pass.
+    score_decomposition: ScoreDecomposition | None = None
+    gap: GapAnalysis | None = None
+    cost_frame: CostFrame | None = None
+    methodology: MethodologyNote | None = None
+    glossary: list[GlossaryEntry] = field(default_factory=list)
+    citations: list[Citation] = field(default_factory=list)
+    executive_summary: list[str] = field(default_factory=list)  # 3–4 prose paragraphs
+    economic_frame: dict | None = None  # persona-specific structure (holdback / tranche / sprint / manifest)
 
 
 def deliverable_to_dict(d: Deliverable) -> dict:
@@ -398,12 +540,19 @@ def _appendix_for(scored: dict) -> EngineeringAppendix:
 
 
 __all__ = [
+    "CategoryArithmetic",
+    "Citation",
+    "CostFrame",
     "CoverPage",
     "Deliverable",
     "EngineeringAppendix",
+    "GapAnalysis",
+    "GlossaryEntry",
+    "MethodologyNote",
     "Recommendation",
     "RecommendationOption",
     "RecommendationVerdict",
+    "ScoreDecomposition",
     "Section",
     "SectionFact",
     "build_deliverable",
