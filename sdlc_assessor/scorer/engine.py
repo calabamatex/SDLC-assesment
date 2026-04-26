@@ -125,6 +125,9 @@ def score_evidence(
     maturity: str,
     repo_type: str,
     policy_overrides: dict | None = None,
+    *,
+    use_llm_narrator: bool = False,
+    llm_model: str | None = None,
 ) -> dict:
     effective = build_effective_profile(use_case, maturity, repo_type, policy_overrides=policy_overrides)
     use_case_profile = effective["use_case_profile"]
@@ -200,6 +203,24 @@ def score_evidence(
             score=entry_score,
             max_score=entry_max,
         )
+        # SDLC-066: optional LLM-narrated summary that overrides the
+        # deterministic one. Returns None on any activation gate / API
+        # failure, in which case we keep the deterministic summary.
+        if use_llm_narrator:
+            from sdlc_assessor.scorer.llm_narrator import DEFAULT_MODEL, narrate_category
+
+            narrative = narrate_category(
+                category=cat,
+                applicability=app,
+                findings_in_cat=findings_by_cat.get(cat, []),
+                deduction_total=deductions_by_cat.get(cat, 0.0),
+                score=entry_score,
+                max_score=entry_max,
+                model=llm_model or DEFAULT_MODEL,
+                use_llm=True,
+            )
+            if narrative:
+                summary = narrative
         category_scores.append(
             {
                 "category": cat,

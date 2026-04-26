@@ -13,6 +13,7 @@ from sdlc_assessor.compare.markdown import render_comparison_markdown
 from sdlc_assessor.core.io import read_json, write_json
 from sdlc_assessor.remediation.markdown import render_remediation_markdown
 from sdlc_assessor.remediation.planner import build_remediation_plan
+from sdlc_assessor.renderer.html import render_html_report
 from sdlc_assessor.renderer.markdown import render_markdown_report
 from sdlc_assessor.scorer.engine import score_evidence
 
@@ -48,11 +49,30 @@ def build_parser() -> argparse.ArgumentParser:
     score.add_argument("--policy", help="Optional policy override JSON path")
     score.add_argument("--out", default="./.sdlc/scored.json", help="Output JSON path")
     score.add_argument("--json", action="store_true", help="Emit JSON artifact")
+    score.add_argument(
+        "--narrate-with-llm",
+        action="store_true",
+        help=(
+            "Replace the deterministic per-category summary with an LLM-generated narrative. "
+            "Requires ANTHROPIC_API_KEY and the [llm] extra. Falls back silently to the "
+            "deterministic summary on any gate failure."
+        ),
+    )
+    score.add_argument(
+        "--llm-model",
+        default=None,
+        help="Anthropic model id (default: claude-haiku-4-5-20251001).",
+    )
 
-    render = sub.add_parser("render", help="Render markdown report")
+    render = sub.add_parser("render", help="Render report (markdown or html)")
     render.add_argument("scored_path", help="Path to scored.json")
-    render.add_argument("--format", default="markdown", choices=["markdown"], help="Render format")
-    render.add_argument("--out", default="./.sdlc/report.md", help="Output report path")
+    render.add_argument(
+        "--format",
+        default="markdown",
+        choices=["markdown", "html", "both"],
+        help="Render format. `both` writes report.md AND report.html.",
+    )
+    render.add_argument("--out", default=None, help="Output path (default: ./.sdlc/report.md or .html)")
 
     remediate = sub.add_parser("remediate", help="Generate remediation plan")
     remediate.add_argument("scored_path", help="Path to scored.json")
@@ -66,6 +86,21 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--repo-type", default=None, help="Repo type profile (default: classifier-inferred)")
     run.add_argument("--policy", help="Optional policy override JSON path")
     run.add_argument("--out-dir", default="./.sdlc", help="Output directory")
+    run.add_argument(
+        "--format",
+        default="markdown",
+        choices=["markdown", "html", "both"],
+        help="Report format produced under <out-dir>/report.{md,html}",
+    )
+    run.add_argument(
+        "--narrate-with-llm",
+        action="store_true",
+        help=(
+            "Replace deterministic per-category summaries with LLM-generated narratives "
+            "(requires ANTHROPIC_API_KEY + [llm] extra)."
+        ),
+    )
+    run.add_argument("--llm-model", default=None, help="Anthropic model id")
 
     compare = sub.add_parser(
         "compare",
@@ -171,7 +206,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         policy = read_json(args.policy) if args.policy else None
         payload = score_evidence(
-            evidence, args.use_case, maturity, repo_type, policy_overrides=policy
+            evidence,
+            args.use_case,
+            maturity,
+            repo_type,
+            policy_overrides=policy,
+            use_llm_narrator=getattr(args, "narrate_with_llm", False),
+            llm_model=getattr(args, "llm_model", None),
         )
         if args.json:
             write_json(args.out, payload)
@@ -179,11 +220,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "render":
         scored = read_json(args.scored_path)
-        report = render_markdown_report(scored)
-        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.out, "w", encoding="utf-8") as f:
-            f.write(report)
-        return 0
+        return _render_with_format(
+            scored,
+            fmt=args.format,
+            out=args.out,
+            default_dir=Path("./.sdlc"),
+        )
 
     if args.command == "remediate":
         scored = read_json(args.scored_path)
@@ -214,13 +256,21 @@ def main(argv: list[str] | None = None) -> int:
 
         policy = read_json(args.policy) if args.policy else None
         scored = score_evidence(
-            evidence, args.use_case, maturity, repo_type, policy_overrides=policy
+            evidence,
+            args.use_case,
+            maturity,
+            repo_type,
+            policy_overrides=policy,
+            use_llm_narrator=getattr(args, "narrate_with_llm", False),
+            llm_model=getattr(args, "llm_model", None),
         )
         scored_path = out_dir / "scored.json"
         write_json(scored_path, scored)
 
-        report_md = render_markdown_report(scored)
-        (out_dir / "report.md").write_text(report_md, encoding="utf-8")
+        if args.format in ("markdown", "both"):
+            (out_dir / "report.md").write_text(render_markdown_report(scored), encoding="utf-8")
+        if args.format in ("html", "both"):
+            (out_dir / "report.html").write_text(render_html_report(scored), encoding="utf-8")
 
         remediation = build_remediation_plan(scored)
         remediation_md = render_remediation_markdown(remediation)
@@ -230,6 +280,40 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "compare":
         return _run_compare(args)
 
+    return 0
+
+
+def _render_with_format(scored: dict, *, fmt: str, out: str | None, default_dir: Path) -> int:
+    """Write report(s) honouring ``--format`` and an optional ``--out`` override.
+
+    Default output paths are ``./.sdlc/report.md`` and ``./.sdlc/report.html``.
+    When ``fmt == "both"``, ``--out`` is treated as a base name and ``.md``/
+    ``.html`` are appended.
+    """
+    base: Path | None = None if out is None else Path(out)
+
+    def _md_path() -> Path:
+        if base is None:
+            return default_dir / "report.md"
+        if fmt == "both":
+            return base.with_suffix(".md")
+        return base
+
+    def _html_path() -> Path:
+        if base is None:
+            return default_dir / "report.html"
+        if fmt == "both":
+            return base.with_suffix(".html")
+        return base
+
+    if fmt in ("markdown", "both"):
+        path = _md_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(render_markdown_report(scored), encoding="utf-8")
+    if fmt in ("html", "both"):
+        path = _html_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(render_html_report(scored), encoding="utf-8")
     return 0
 
 

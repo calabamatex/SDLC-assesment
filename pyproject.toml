@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sdlc-assessor"
-version = "0.7.0"
+version = "0.8.0"
 description = "Evidence-driven SDLC repository assessment framework"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -42,6 +42,12 @@ sast = [
     # gracefully when the tool is absent.
     "bandit>=1.7",
     "semgrep>=1.50",
+]
+llm = [
+    # SDLC-066: optional LLM-narrated category summaries via the Anthropic
+    # API. The deterministic narrator stays the default; this extra is
+    # only needed when running with `--narrate-with-llm`.
+    "anthropic>=0.40",
 ]
 dev = [
     "pytest>=8.0",
