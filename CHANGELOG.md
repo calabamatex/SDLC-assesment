@@ -10,11 +10,32 @@ Nothing yet — see Roadmap below.
 
 ### Roadmap (not yet implemented)
 
-- `sdlc compare repo_a repo_b` mode (diligence-grade side-by-side)
-- Cross-detector dedupe — when both a native pack and a SAST adapter flag the same line, current behaviour is to emit both findings; a future pass can collapse them
 - HTML renderer in addition to Markdown
 - Remote profile distribution (signed packs)
 - LLM-backed category narratives via the Anthropic API (deterministic path stays default)
+
+## [0.7.0] - 2026-04-26
+
+Fifth Phase-8 milestone: diligence-grade analysis. Adds the `sdlc compare` subcommand for side-by-side scoring and a cross-detector dedupe pass that collapses near-duplicate findings between native packs and SAST adapters.
+
+### Added
+
+- **SDLC-061: `sdlc compare repo_a repo_b` subcommand.** Runs the full pipeline against both repos under the same use-case profile, emits `repo_a/scored.json` + `repo_b/scored.json`, and a top-level `comparison.json` + `comparison.md`. The Markdown report has five sections: overall score+verdict delta, per-category score deltas, hard-blocker delta, finding-set diff (only-in-A / only-in-B / common with counts), and classification delta.
+- **`sdlc_assessor/compare/` package** with `engine.py` (build a typed `Comparison` from two scored payloads) and `markdown.py` (render the Markdown report). `Comparison` is JSON-serialisable via `comparison_to_dict`.
+- **SDLC-062: Cross-detector dedupe.** New `sdlc_assessor/normalizer/dedupe.py` with a family map covering eight semantic families: `code_eval` (eval/exec across Python AST + bandit + ruff + tsjs eval/Function), `shell_exec` (subprocess shell + bandit B602 + tsjs exec/execSync + Go/Java/Kotlin/C# command-execution patterns), `unsafe_deserialize` (pickle), `sql_injection`, `hardcoded_secret`, `tls_validation_off`, `xml_external_entity`. Findings without a family-key remain untouched. When ≥2 findings share `(path, line_start, family)` they collapse into one merged finding: strongest severity wins, evidence merges uniquely, `detector_source` becomes `merged:<sources>`, tags include each contributing detector, statement is annotated with the agreement count.
+- The dedupe pass runs at the end of `collect_evidence`, after `normalize_findings`, so every finding has a stable id and a normalized score_impact before merging.
+- 8 new tests in `tests/unit/test_dedupe.py` (family classification, pass-through for unknown subcategories, merge behaviour for same-line/same-family findings, no-merge for different lines/paths, evidence combining, idempotence).
+- 12 new tests in `tests/unit/test_compare.py` (engine deltas + verdict change + JSON serialisation; renderer section coverage; CLI integration tests for the `compare` subcommand against three language fixture pairs).
+
+### Changed
+
+- Pipeline ordering: detector findings now flow `registry.run` → `normalize_findings` → `deduplicate_findings` → scorer. The deduplication is invisible to the scorer (which sees a smaller deduped finding list, with strongest-severity preserved).
+- CLI surface: `sdlc compare …` joins the existing six subcommands. Inherits `--use-case`/`--maturity`/`--repo-type`/`--policy` semantics from `run`.
+
+### Notes
+
+- Dedupe is intentionally line-precise. Findings that conceptually overlap but land on different lines (e.g. native says line 12, SAST says line 13 because of an off-by-one) stay separate. A future heuristic could broaden this with a +/- 1 line tolerance.
+- Comparison artifacts always include both repos' full pipeline outputs under `<out-dir>/repo_a/` and `<out-dir>/repo_b/` for downstream analysis.
 
 ## [0.6.0] - 2026-04-26
 
