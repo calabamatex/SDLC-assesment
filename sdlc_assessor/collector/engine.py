@@ -14,6 +14,7 @@ from sdlc_assessor.collector.dependencies import extract_dependency_graph
 from sdlc_assessor.core.io import read_json
 from sdlc_assessor.detectors.common import iter_repo_files
 from sdlc_assessor.detectors.registry import DetectorRegistry
+from sdlc_assessor.normalizer.dedupe import deduplicate_findings
 from sdlc_assessor.normalizer.findings import normalize_findings
 
 CODE_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs", ".java", ".cs", ".kt", ".kts"}
@@ -102,6 +103,10 @@ def collect_evidence(repo_target: str, classification_path: str) -> dict:
     registry = DetectorRegistry()
     raw_findings = registry.run(repo_path)
     findings = normalize_findings(raw_findings)
+    # SDLC-062: collapse near-duplicates between native packs and SAST adapters
+    # *after* normalization so every finding has a stable id and a normalized
+    # score_impact before merging.
+    findings = deduplicate_findings(findings)
 
     evidence = {
         "repo_meta": classification.get("repo_meta", {}),

@@ -8,6 +8,8 @@ from pathlib import Path
 
 from sdlc_assessor.classifier.engine import classify_repo
 from sdlc_assessor.collector.engine import collect_evidence
+from sdlc_assessor.compare.engine import build_comparison, comparison_to_dict
+from sdlc_assessor.compare.markdown import render_comparison_markdown
 from sdlc_assessor.core.io import read_json, write_json
 from sdlc_assessor.remediation.markdown import render_remediation_markdown
 from sdlc_assessor.remediation.planner import build_remediation_plan
@@ -64,6 +66,40 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--repo-type", default=None, help="Repo type profile (default: classifier-inferred)")
     run.add_argument("--policy", help="Optional policy override JSON path")
     run.add_argument("--out-dir", default="./.sdlc", help="Output directory")
+
+    compare = sub.add_parser(
+        "compare",
+        help="Compare two repos side-by-side and emit a Markdown delta report (SDLC-061).",
+    )
+    compare.add_argument("repo_a", help="Path to the baseline repository (A)")
+    compare.add_argument("repo_b", help="Path to the comparison repository (B)")
+    compare.add_argument("--use-case", required=True, help="Use-case profile applied to both repos")
+    compare.add_argument(
+        "--maturity",
+        default=None,
+        help="Maturity profile for both repos (default: classifier-inferred from each repo independently)",
+    )
+    compare.add_argument(
+        "--repo-type",
+        default=None,
+        help="Repo type profile for both repos (default: classifier-inferred from each repo independently)",
+    )
+    compare.add_argument("--policy", help="Optional policy override JSON path applied to both repos")
+    compare.add_argument(
+        "--out-dir",
+        default="./.sdlc/compare",
+        help="Output directory (default: ./.sdlc/compare). Each repo's artifacts go in repo_a/ and repo_b/.",
+    )
+    compare.add_argument(
+        "--out-md",
+        default=None,
+        help="Output path for the Markdown comparison report (default: <out-dir>/comparison.md).",
+    )
+    compare.add_argument(
+        "--out-json",
+        default=None,
+        help="Output path for the JSON comparison artifact (default: <out-dir>/comparison.json).",
+    )
 
     return parser
 
@@ -191,6 +227,87 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "remediation.md").write_text(remediation_md, encoding="utf-8")
         return 0
 
+    if args.command == "compare":
+        return _run_compare(args)
+
+    return 0
+
+
+def _run_pipeline_for_compare(
+    repo_target: str,
+    *,
+    out_dir: Path,
+    use_case: str,
+    maturity_arg: str | None,
+    repo_type_arg: str | None,
+    policy: dict | None,
+) -> dict:
+    """Run classify → collect → score for one repo and write the artifacts.
+
+    Returns the ``scored`` dict in-memory so the caller can build a
+    comparison without re-reading from disk.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    classification = classify_repo(repo_target)
+    classification_path = out_dir / "classification.json"
+    write_json(classification_path, classification)
+
+    maturity, repo_type = _resolve_profile_defaults(
+        classification.get("classification", {}),
+        maturity=maturity_arg,
+        repo_type=repo_type_arg,
+    )
+
+    evidence = collect_evidence(repo_target, str(classification_path))
+    write_json(out_dir / "evidence.json", evidence)
+
+    scored = score_evidence(
+        evidence, use_case, maturity, repo_type, policy_overrides=policy
+    )
+    write_json(out_dir / "scored.json", scored)
+    return scored
+
+
+def _run_compare(args: argparse.Namespace) -> int:
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    policy = read_json(args.policy) if args.policy else None
+
+    print(f"compare: scoring repo A at {args.repo_a}", file=sys.stderr)
+    scored_a = _run_pipeline_for_compare(
+        args.repo_a,
+        out_dir=out_dir / "repo_a",
+        use_case=args.use_case,
+        maturity_arg=args.maturity,
+        repo_type_arg=args.repo_type,
+        policy=policy,
+    )
+    print(f"compare: scoring repo B at {args.repo_b}", file=sys.stderr)
+    scored_b = _run_pipeline_for_compare(
+        args.repo_b,
+        out_dir=out_dir / "repo_b",
+        use_case=args.use_case,
+        maturity_arg=args.maturity,
+        repo_type_arg=args.repo_type,
+        policy=policy,
+    )
+
+    comparison = build_comparison(scored_a, scored_b, label_a=args.repo_a, label_b=args.repo_b)
+
+    md_path = Path(args.out_md) if args.out_md else (out_dir / "comparison.md")
+    json_path = Path(args.out_json) if args.out_json else (out_dir / "comparison.json")
+
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.write_text(render_comparison_markdown(comparison), encoding="utf-8")
+    write_json(json_path, comparison_to_dict(comparison))
+
+    print(
+        f"compare: overall {comparison.overall_score_a} → {comparison.overall_score_b} "
+        f"(Δ {comparison.overall_score_delta:+d}); verdict {comparison.verdict_change}",
+        file=sys.stderr,
+    )
     return 0
 
 
