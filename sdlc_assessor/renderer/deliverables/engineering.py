@@ -69,7 +69,9 @@ def build(scored: dict, profile: dict) -> Deliverable:
         title="Engineering Health Report",
         subtitle=_subtitle(score, verdict, len(crit), len(high)),
         recommendation=recommendation_verdict,
-        recommendation_rationale=_health_rationale(score, len(crit), len(high)),
+        recommendation_rationale=_health_rationale(
+            score, len(crit), len(high), pass_threshold=pass_threshold
+        ),
         score=score,
         score_band=score_band(score),
         headline_facts=_cover_facts(scored),
@@ -132,23 +134,31 @@ def _subtitle(score: int, verdict: str, crit: int, high: int) -> str:
     return f"Health band: {band} · score {score}/100 · verdict {verdict} · {severity_summary}."
 
 
-def _health_rationale(score: int, crit: int, high: int) -> str:
+def _health_rationale(
+    score: int, crit: int, high: int, *, pass_threshold: int = 70
+) -> str:
+    """Engineering cover rationale. Names the engineering_triage threshold + gap."""
+    gap = pass_threshold - score
     if crit:
         return (
+            f"Score {score} (engineering_triage pass threshold {pass_threshold}); "
             f"{crit} critical blocker(s) dominate health. Fix Phase 1 (security) "
             "before any other engineering work — it's the highest-value lift."
         )
-    if score < 56:
+    if score < pass_threshold:
         return (
-            "Score sits in the conditional/fail band. Health is salvageable but "
-            "requires concentrated work; see §4 for the effort × impact triage."
+            f"Score {score} sits {gap} points below the engineering_triage pass threshold {pass_threshold}. "
+            "Health is salvageable but requires concentrated work; see §4 for the effort × impact triage."
         )
     if high:
         return (
-            f"Score is OK but {high} high-severity issues remain. They're the "
-            "next sprint's work — not crisis-level, but on the critical path."
+            f"Score {score} clears the engineering_triage pass threshold {pass_threshold}, "
+            f"but {high} high-severity issue(s) remain — next sprint's work, not crisis-level."
         )
-    return "Codebase is in healthy shape. Treat this report as a maintenance baseline."
+    return (
+        f"Score {score} ≥ engineering_triage pass threshold {pass_threshold} with no hard blockers. "
+        "Codebase is in healthy shape; treat this report as a maintenance baseline."
+    )
 
 
 def _cover_facts(scored: dict) -> list[tuple[str, str]]:

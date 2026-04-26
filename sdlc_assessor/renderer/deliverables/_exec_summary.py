@@ -36,11 +36,37 @@ from sdlc_assessor.renderer.deliverables.base import (
 
 
 _VERDICT_HEADLINE = {
-    "proceed": "Recommendation: **proceed**.",
-    "proceed_with_conditions": "Recommendation: **proceed with conditions**.",
-    "defer": "Recommendation: **defer**.",
-    "decline": "Recommendation: **decline**.",
+    "acquisition_diligence": {
+        "proceed": "Acquisition recommendation: **proceed to close**.",
+        "proceed_with_conditions": "Acquisition recommendation: **proceed only if conditions close before close**.",
+        "defer": "Acquisition recommendation: **defer until seller closes the gap**.",
+        "decline": "Acquisition recommendation: **decline at proposed terms**.",
+    },
+    "vc_diligence": {
+        "proceed": "Investment recommendation: **lead at proposed terms**.",
+        "proceed_with_conditions": "Investment recommendation: **conditional invest pending founder Q&A**.",
+        "defer": "Investment recommendation: **defer; re-diligence after seller-funded fixes**.",
+        "decline": "Investment recommendation: **decline at proposed terms**.",
+    },
+    "engineering_triage": {
+        "proceed": "Engineering recommendation: **maintain existing release cadence**.",
+        "proceed_with_conditions": "Engineering recommendation: **schedule a concentrated remediation sprint**.",
+        "defer": "Engineering recommendation: **plan a multi-sprint cleanup before next major release**.",
+        "decline": "Engineering recommendation: **freeze feature work until phase 1 ships**.",
+    },
+    "remediation_agent": {
+        "proceed": "Agent directive: **idle; codebase at calibration target**.",
+        "proceed_with_conditions": "Agent directive: **execute the plan from phase 1; commit per task; verify per phase**.",
+        "defer": "Agent directive: **execute plan with extra verification gates between phases**.",
+        "decline": "Agent directive: **halt; humans must review the blocker list before any patch advances**.",
+    },
 }
+
+
+def _verdict_headline_for(use_case: str, verdict: str) -> str:
+    """Persona-specific verdict headline; falls back to a generic phrasing."""
+    by_persona = _VERDICT_HEADLINE.get(use_case, {})
+    return by_persona.get(verdict) or f"Recommendation: **{verdict.replace('_', ' ')}**."
 
 
 _PERSONA_FRAME = {
@@ -55,6 +81,11 @@ _PERSONA_FRAME = {
             "we'd absorb post-close"
         ),
         "phase_meaning": "phases of remediation the seller could ship before signing",
+        "blocker_consequence": "gate the acquisition unless seller-funded or carved out of the deal",
+        "no_gap_consequence": (
+            "the asset clears the acquisition bar; sizing the deal becomes a "
+            "valuation conversation rather than a remediation negotiation"
+        ),
     },
     "vc_diligence": {
         "audience": "an investor evaluating whether the code substantiates the pitch",
@@ -64,6 +95,11 @@ _PERSONA_FRAME = {
         ),
         "gap_meaning": "thesis-credibility gap we'd need addressed before term-sheet",
         "phase_meaning": "remediation phases the founder would commit to as milestones",
+        "blocker_consequence": "puncture the investment thesis and force tranching or a re-priced round",
+        "no_gap_consequence": (
+            "the code substantiates the pitch as presented; remaining diligence "
+            "is commercial and team-shaped, not technical"
+        ),
     },
     "engineering_triage": {
         "audience": "an engineering lead planning what to fix this quarter",
@@ -72,12 +108,22 @@ _PERSONA_FRAME = {
         ),
         "gap_meaning": "the score lift available from working the remediation plan",
         "phase_meaning": "remediation phases the team would work in order",
+        "blocker_consequence": "page the on-call rotation and dominate the next sprint regardless of score",
+        "no_gap_consequence": (
+            "no concentrated remediation sprint required; treat this report as "
+            "the maintenance baseline and watch the radar between releases"
+        ),
     },
     "remediation_agent": {
         "audience": "an autonomous coding agent executing the remediation plan",
         "score_meaning": "the calibration target for the fix loop",
         "gap_meaning": "cumulative score lift available from completing the plan",
         "phase_meaning": "phases of the plan, executed sequentially with verification gates",
+        "blocker_consequence": "block agent advancement; the task pointer must not move past an unresolved blocker",
+        "no_gap_consequence": (
+            "the asset is at the calibration target; agent should idle or "
+            "schedule the next assessment rather than open new tasks"
+        ),
     },
 }
 
@@ -166,7 +212,7 @@ def build_executive_summary(
         if high_count:
             parts.append(f"**{high_count} high**")
         blocker_clause = (
-            f"{' and '.join(parts)} hard-blocker(s) fired and gate the recommendation regardless of score."
+            f"{' and '.join(parts)} hard-blocker(s) {frame['blocker_consequence']}."
         )
 
     rule_text = _verdict_rule_clause(
@@ -179,16 +225,17 @@ def build_executive_summary(
     )
 
     paragraph_2 = (
-        f"{_VERDICT_HEADLINE.get(verdict, '')} {blocker_clause} "
+        f"{_verdict_headline_for(use_case, verdict)} {blocker_clause} "
         f"Rule: {rule_text}[{rule_marker}]."
     )
 
     # ---- paragraph 3: gap closure ----------------------------------------
     if gap.gap_to_pass <= 0:
         paragraph_3 = (
-            f"There is no gap to close — the asset already clears the bar. "
-            f"Distinction sits {gap.gap_to_distinction} points above the current score; "
-            f"see the score-decomposition section for the per-category breakdown."
+            f"No gap to close: {frame['no_gap_consequence']}. "
+            f"Distinction sits {gap.gap_to_distinction} points above the current score "
+            f"({distinction_threshold} − {overall}); the score-decomposition section breaks "
+            "out the per-category contributions."
         )
     elif gap.closing_phases:
         # The first closing phase is the one with the largest projected lift

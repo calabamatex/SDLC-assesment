@@ -85,7 +85,14 @@ def build(scored: dict, profile: dict) -> Deliverable:
         title="VC Diligence — Thesis Evaluation",
         subtitle=_subtitle(recommendation_verdict, score),
         recommendation=recommendation_verdict,
-        recommendation_rationale=_rationale(recommendation_verdict, score, len(crit), len(high)),
+        recommendation_rationale=_rationale(
+            recommendation_verdict,
+            score,
+            len(crit),
+            len(high),
+            pass_threshold=pass_threshold,
+            distinction_threshold=distinction_threshold,
+        ),
         score=score,
         score_band=score_band(score),
         headline_facts=_cover_facts(scored, blocks),
@@ -162,25 +169,36 @@ def _subtitle(verdict: str, score: int) -> str:
     }.get(verdict, f"Investment thesis evaluation. Score {score}/100.")
 
 
-def _rationale(verdict: str, score: int, critical: int, high: int) -> str:
+def _rationale(
+    verdict: str,
+    score: int,
+    critical: int,
+    high: int,
+    *,
+    pass_threshold: int = 72,
+    distinction_threshold: int = 88,
+) -> str:
+    """VC cover rationale. Names the bar, the gap, and the rule that fired."""
+    gap = pass_threshold - score
     if verdict == "proceed":
         return (
-            "Code substantiates the pitched technical claims with no critical "
-            "blockers; investment recommended subject to commercial diligence."
+            f"Score {score} ≥ pass threshold {pass_threshold} (vc_diligence) with no critical blockers; "
+            "thesis is substantiated by the code evidence."
         )
     if verdict == "proceed_with_conditions":
         return (
-            f"Substantiation is partial; {critical} critical and {high} high "
-            "issues warrant founder Q&A before term-sheet."
+            f"Score {score} ≥ pass threshold {pass_threshold} but {critical} critical and {high} high issues "
+            "puncture the thesis; tranche the round against milestone closure."
         )
     if verdict == "defer":
         return (
-            "Score sits below the diligence bar — recommend defer pending "
-            "founder answers and a re-run after fixes."
+            f"Score {score} falls {gap} points short of the vc_diligence pass threshold {pass_threshold}. "
+            "Defer term-sheet pending founder Q&A and a re-run after fixes."
         )
     return (
-        "Evidence does not back the headline pitch and severe issues persist; "
-        "decline at proposed terms."
+        f"Score {score} is {gap} points below the vc_diligence pass threshold {pass_threshold}; "
+        f"{critical} critical blocker(s) materially contradict the pitch. "
+        "Decline at proposed terms; revisit at a re-priced round if seller closes the gap."
     )
 
 
