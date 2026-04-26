@@ -209,6 +209,52 @@ def aggregate(
     )
 
 
+def assessment_to_dict(assessment: RSFAssessment) -> dict:
+    """JSON-friendly serialization of an RSFAssessment.
+
+    Used by the CLI to attach the RSF result to ``scored.json`` and by
+    tests / consumers that need a plain-Python view.
+    """
+    return {
+        "framework_version": assessment.framework_version,
+        "dimensions": [
+            {
+                "dimension_id": d.dimension_id,
+                "title": d.title,
+                "mean": d.mean,
+                "n_scored": d.n_scored,
+                "n_unverified": d.n_unverified,
+                "n_total": d.n_total,
+                "confidence_flagged": d.confidence_flagged,
+                "criteria": [
+                    {
+                        "criterion_id": c.criterion_id,
+                        "value": c.value,
+                        "evidence": list(c.evidence),
+                        "rationale": c.rationale,
+                    }
+                    for c in d.criteria
+                ],
+            }
+            for d in assessment.dimensions
+        ],
+        "personas": [
+            {
+                "persona_id": p.persona_id,
+                "persona_label": p.persona_label,
+                "weights_used": dict(p.weights_used),
+                "total": p.total,
+                "total_pct": p.total_pct,
+                "confidence_flagged": p.confidence_flagged,
+                "limited_confidence_warning": p.limited_confidence_warning,
+            }
+            for p in assessment.personas
+        ],
+        "na_dimensions": list(assessment.na_dimensions),
+        "flagged_dimensions": list(assessment.flagged_dimensions),
+    }
+
+
 __all__ = [
     "CriterionScore",
     "DimensionScore",
@@ -217,4 +263,5 @@ __all__ = [
     "RSFAssessment",
     "UNVERIFIED",
     "aggregate",
+    "assessment_to_dict",
 ]

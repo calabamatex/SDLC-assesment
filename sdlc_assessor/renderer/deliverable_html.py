@@ -266,6 +266,33 @@ section.kind-prose, section.kind-facts { margin-bottom: 1rem; }
 .both-grid .col { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); padding: 1rem 1.1rem; }
 .both-grid .col h4 { margin-top: 0; color: var(--accent); }
 
+/* RSF v1.0 assessment block — anchored scoring view */
+.rsf-assessment {
+  background: var(--surface); border-radius: 10px; box-shadow: var(--shadow);
+  padding: 1.6rem 1.8rem; margin: 0.6rem 0 2.2rem;
+  border-left: 3px solid var(--accent);
+}
+.rsf-assessment h2 { border-top: none; margin-top: 0; padding-top: 0; }
+.rsf-assessment h4 { margin: 1.2rem 0 0.5rem; color: var(--accent); font-size: 0.92rem; text-transform: none; letter-spacing: 0; }
+.rsf-table {
+  width: 100%; border-collapse: collapse; font-family: var(--sans); font-size: 0.92rem;
+  margin: 0.4rem 0 0.6rem;
+}
+.rsf-table th, .rsf-table td { padding: 0.5rem 0.6rem; vertical-align: top; text-align: left; }
+.rsf-table thead th { border-bottom: 1px solid var(--rule-strong); color: var(--muted); font-weight: 600; }
+.rsf-table tbody tr { border-bottom: 1px solid var(--rule); }
+.rsf-table code { font-family: var(--mono); font-size: 0.85em; }
+.rsf-unverified-flag {
+  display: inline-block; padding: 0.05rem 0.4rem; border-radius: 999px;
+  background: var(--medium-bg); color: var(--medium-fg);
+  font-size: 0.78rem; font-weight: 600; margin-left: 0.3rem; cursor: help;
+}
+.rsf-warning {
+  display: inline-block; padding: 0.05rem 0.4rem; border-radius: 999px;
+  background: var(--high-bg); color: var(--high-fg);
+  font-size: 0.78rem; font-weight: 600; margin-left: 0.3rem; cursor: help;
+}
+
 /* 0.11.0 depth pass: provenance banner — pinned identity at the very top */
 .provenance {
   background: var(--bg-alt); border-bottom: 1px solid var(--rule-strong);
@@ -952,6 +979,141 @@ def _render_provenance_header(deliverable: Deliverable) -> str:
 """
 
 
+def _render_rsf_assessment(scored: dict, deliverable: Deliverable) -> str:
+    """Render the RSF v1.0 assessment block.
+
+    The RSF section is the report's anchored scoring view (replaces the
+    legacy made-up 0–100 score). Per-dimension means (0–5), per-persona
+    weighted totals (0–100%), confidence flagging, top-5 lowest sub-
+    criteria with framework citations, and a 'limited confidence'
+    warning when applicable.
+
+    See ``docs/frameworks/rsf_v1.0.md`` for the canonical spec.
+    """
+    rsf = scored.get("rsf") if isinstance(scored, dict) else None
+    if not rsf:
+        return ""
+
+    dims = rsf.get("dimensions") or []
+    personas = rsf.get("personas") or []
+    framework_version = rsf.get("framework_version", "v1.0")
+
+    # ---- per-dimension table -----------------------------------------------
+    dim_rows: list[str] = []
+    for d in dims:
+        mean = d.get("mean")
+        if mean is None:
+            score_cell = '<span class="muted">N/A</span>'
+        else:
+            score_cell = f"{mean:.2f} <span class=\"muted\">/ 5</span>"
+        flag = ""
+        if d.get("confidence_flagged"):
+            flag = (
+                f' <span class="rsf-unverified-flag" title="'
+                f'{d.get("n_unverified", 0)} of {d.get("n_total", 0)} sub-criteria '
+                'unverified">[?]</span>'
+            )
+        dim_rows.append(
+            f'<tr><td><code>{_esc(d["dimension_id"])}</code></td>'
+            f'<td>{_esc(d["title"])}</td>'
+            f'<td>{score_cell}{flag}</td>'
+            f'<td><span class="muted">'
+            f'{d.get("n_scored", 0)} scored, {d.get("n_unverified", 0)} unverified, '
+            f'{d.get("n_total", 0)} total</span></td></tr>'
+        )
+
+    # ---- per-persona totals ------------------------------------------------
+    persona_rows: list[str] = []
+    for p in personas:
+        warning = ""
+        if p.get("limited_confidence_warning"):
+            warning = (
+                ' <span class="rsf-warning" title="'
+                'More than 25% of weight maps to unverified dimensions">'
+                '⚠ limited confidence</span>'
+            )
+        persona_rows.append(
+            f'<tr><td>{_esc(p["persona_label"])}</td>'
+            f'<td><strong>{p["total_pct"]:.1f}%</strong>{warning}</td>'
+            f'<td><code>{p["total"]:.1f}</code> / 500</td></tr>'
+        )
+
+    # ---- top-5 lowest scored sub-criteria (real, not unverified) ----------
+    scored_criteria: list[dict] = []
+    for d in dims:
+        for c in d.get("criteria") or []:
+            v = c.get("value")
+            if isinstance(v, int) and 0 <= v <= 5:
+                scored_criteria.append({**c, "dimension_id": d["dimension_id"]})
+    scored_criteria.sort(key=lambda c: c["value"])
+    bottom_five = scored_criteria[:5]
+    if bottom_five:
+        bottom_rows = "".join(
+            f'<tr><td><code>{_esc(c["criterion_id"])}</code></td>'
+            f'<td><strong>{c["value"]}</strong> / 5</td>'
+            f'<td>{_esc(c["rationale"])}</td>'
+            f'<td><span class="muted">{_esc(", ".join(c.get("evidence", [])[:2]))}</span></td>'
+            f'</tr>'
+            for c in bottom_five
+        )
+        bottom_table = f"""
+<h4>Top remediation priorities (lowest scored sub-criteria)</h4>
+<table class="rsf-table">
+  <thead><tr><th>RSF id</th><th>Score</th><th>Anchor matched</th><th>Evidence</th></tr></thead>
+  <tbody>{bottom_rows}</tbody>
+</table>
+"""
+    else:
+        bottom_table = (
+            '<p class="muted">No sub-criteria scored against the rubric — '
+            "every criterion currently returns ? (evidence not collected). "
+            "Extending the collector pipeline (workflow-history walking, "
+            "OSV scanning, GitHub API integration) will unlock real scores.</p>"
+        )
+
+    flagged = rsf.get("flagged_dimensions") or []
+    flagged_summary = (
+        f"{len(flagged)} of 8 dimensions flagged (≥1 unverified sub-criterion): "
+        + ", ".join(flagged)
+        if flagged
+        else "All dimensions verified."
+    )
+
+    return f"""
+<section class="rsf-assessment" id="rsf-assessment" aria-label="RSF assessment">
+  <h2>RSF {_esc(framework_version)} assessment</h2>
+  <p class="summary">
+    Repository Scoring Framework v1.0 — every threshold and level anchor
+    is sourced from a published industry standard
+    (<a href="https://dora.dev/" target="_blank" rel="noopener">DORA</a>,
+    <a href="https://scorecard.dev/" target="_blank" rel="noopener">OpenSSF Scorecard</a>,
+    <a href="https://csrc.nist.gov/projects/ssdf" target="_blank" rel="noopener">NIST SSDF</a>,
+    <a href="https://owasp.org/www-project-application-security-verification-standard/" target="_blank" rel="noopener">OWASP ASVS</a>,
+    <a href="https://cwe.mitre.org/" target="_blank" rel="noopener">CWE</a>,
+    <a href="https://slsa.dev/" target="_blank" rel="noopener">SLSA</a>,
+    <a href="https://cyclonedx.org/" target="_blank" rel="noopener">CycloneDX</a>,
+    <a href="https://www.iso.org/standard/27001" target="_blank" rel="noopener">ISO 27001</a>,
+    others). See <code>docs/frameworks/rsf_v1.0.md</code> for the full spec.
+  </p>
+
+  <h4>Per-dimension scores (0–5)</h4>
+  <table class="rsf-table">
+    <thead><tr><th>Dim</th><th>Title</th><th>Score</th><th>Sub-criteria</th></tr></thead>
+    <tbody>{''.join(dim_rows)}</tbody>
+  </table>
+  <p class="muted">{_esc(flagged_summary)}</p>
+
+  <h4>Per-persona weighted totals (0–100%)</h4>
+  <table class="rsf-table">
+    <thead><tr><th>Persona</th><th>Total %</th><th>Raw total</th></tr></thead>
+    <tbody>{''.join(persona_rows)}</tbody>
+  </table>
+
+  {bottom_table}
+</section>
+"""
+
+
 def _render_executive_summary(deliverable: Deliverable) -> str:
     """0.11.0 depth pass: prose exec summary with inline footnote markers."""
     if not deliverable.executive_summary:
@@ -1220,6 +1382,7 @@ def render_deliverable_html(
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     provenance_html = _render_provenance_header(deliverable)
     cover_html = _render_cover(deliverable, generated_at=generated_at)
+    rsf_html = _render_rsf_assessment(scored, deliverable)
     exec_summary_html = _render_executive_summary(deliverable)
     methodology_html = _render_methodology(deliverable)
     decomp_html = _render_score_decomposition(deliverable)
@@ -1246,6 +1409,7 @@ def render_deliverable_html(
   {provenance_html}
   <main class="doc">
     {cover_html}
+    {rsf_html}
     {exec_summary_html}
     {methodology_html}
     {decomp_html}

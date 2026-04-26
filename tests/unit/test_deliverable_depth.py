@@ -311,24 +311,41 @@ def test_no_full_paragraph_appears_identically_across_personas(
     }
 
     def _persona_specific_text(html: str) -> set[str]:
-        """Extract sentences from the exec-summary + cover only."""
-        chunks: list[str] = []
-        for tag in ('class="exec-summary"', 'class="recommendation"', 'class="cover"'):
-            idx = html.find(tag)
-            if idx == -1:
-                continue
-            end = html.find("</section>", idx)
-            if end == -1:
-                end = html.find("</aside>", idx)
-            if end == -1:
-                end = idx + 4000
-            chunks.append(html[idx:end])
-        text = " ".join(chunks)
-        # Strip HTML tags.
-        text = re.sub(r"<[^>]+>", " ", text)
-        # Tokenize sentences.
-        sentences = re.split(r"(?<=[.!?])\s+", text)
-        return {s.strip().lower() for s in sentences if len(s.strip()) > 30 and s not in chrome_whitelist}
+        """Extract sentences from the exec-summary's prose paragraphs only.
+
+        The boilerplate guard is for *narrative* content. Some content
+        SHOULD be identical across personas because it describes the same
+        asset:
+        - Provenance (project name, URL, commit) — repo identity.
+        - RSF assessment (per-dimension scores) — same evidence per
+          persona; only persona totals differ.
+        - Must-close hard blockers — same blockers fire for every persona.
+        - Classification line (archetype · maturity · surface) — fact.
+
+        The persona-distinct narrative lives in the exec-summary prose
+        paragraphs (verdict headline + blocker consequences + closing-
+        gap framing). Scope the boilerplate check there.
+        """
+        # Find the exec-summary section.
+        opener = '<section class="exec-summary"'
+        idx = html.find(opener)
+        if idx == -1:
+            return set()
+        end = html.find("</section>", idx)
+        if end == -1:
+            return set()
+        section = html[idx:end]
+
+        # Pull each <p>'s text contents.
+        paragraphs = re.findall(r"<p[^>]*>(.*?)</p>", section, re.DOTALL)
+        sentences: list[str] = []
+        for p in paragraphs:
+            stripped = re.sub(r"<[^>]+>", " ", p)
+            for s in re.split(r"(?<=[.!?])\s+", stripped):
+                s = s.strip()
+                if len(s) > 30 and s not in chrome_whitelist:
+                    sentences.append(s.lower())
+        return set(sentences)
 
     persona_sentences = {
         use_case: _persona_specific_text(html) for use_case, html in rendered_reports.items()

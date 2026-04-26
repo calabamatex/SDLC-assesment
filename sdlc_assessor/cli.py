@@ -16,6 +16,8 @@ from sdlc_assessor.remediation.planner import build_remediation_plan
 from sdlc_assessor.renderer.deliverable_html import render_html_report
 from sdlc_assessor.renderer.deliverables._provenance import collect_provenance
 from sdlc_assessor.renderer.markdown import render_markdown_report
+from sdlc_assessor.rsf import assess_repository as rsf_assess
+from sdlc_assessor.rsf.aggregate import RSFAssessment
 from sdlc_assessor.scorer.engine import score_evidence
 
 # Fallbacks when the classifier cannot infer a maturity or archetype but the
@@ -129,6 +131,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Project source URL shown in the report's provenance banner. Defaults to the git "
             "origin URL when <repo_target> is a git checkout, otherwise 'local path: <abs>' "
             "with explicit 'no git origin' disclosure."
+        ),
+    )
+    run.add_argument(
+        "--d8-not-applicable",
+        action="store_true",
+        help=(
+            "Mark all RSF D8 (compliance & governance) sub-criteria as N/A "
+            "rather than `?`. Use for internal / non-customer-facing assets "
+            "that are genuinely out of compliance scope. Without this flag, "
+            "D8 stays unverified — the framework-correct disclosure when "
+            "compliance evidence is unavailable."
         ),
     )
 
@@ -299,6 +312,19 @@ def main(argv: list[str] | None = None) -> int:
         # and exec summary cite real per-phase projections (0.11.0 depth pass).
         remediation = build_remediation_plan(scored)
         scored["remediation_plan"] = remediation
+
+        # Run the RSF v1.0 assessment and attach to scored. RSF is the
+        # canonical scoring framework as of 0.11.0 — every value is
+        # anchored to a published reference (NIST SSDF, DORA, CWE, CVSS,
+        # SLSA, CycloneDX/SPDX, Sigstore, ISO 27001, AICPA SOC 2,
+        # CSA CAIQ). See docs/frameworks/rsf_v1.0.md for the spec.
+        from sdlc_assessor.rsf.aggregate import assessment_to_dict
+        rsf_result = rsf_assess(
+            scored,
+            repo_path=args.repo_target,
+            d8_not_applicable=getattr(args, "d8_not_applicable", False),
+        )
+        scored["rsf"] = assessment_to_dict(rsf_result)
 
         scored_path = out_dir / "scored.json"
         write_json(scored_path, scored)
