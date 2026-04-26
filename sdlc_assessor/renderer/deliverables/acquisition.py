@@ -81,6 +81,8 @@ def build(scored: dict, profile: dict) -> Deliverable:
             score=score,
             critical=len(crit),
             high=len(high),
+            pass_threshold=pass_threshold,
+            distinction_threshold=distinction_threshold,
         ),
         score=score,
         score_band=score_band(score),
@@ -162,28 +164,39 @@ def _subtitle_for_recommendation(verdict: str, score: int) -> str:
     }.get(verdict, f"Acquisition assessment. Score {score}/100.")
 
 
-def _rationale_sentence(verdict: str, *, score: int, critical: int, high: int) -> str:
+def _rationale_sentence(
+    verdict: str,
+    *,
+    score: int,
+    critical: int,
+    high: int,
+    pass_threshold: int = 74,
+    distinction_threshold: int = 88,
+) -> str:
+    """Cover-page rationale. Names the bar, the gap, and the rule that fired."""
+    gap = pass_threshold - score
     if verdict == "proceed":
         return (
-            "Codebase clears the diligence bar with no critical blockers; "
-            "integration cost is bounded by the issues called out in §3 and §5."
+            f"Score {score} ≥ pass threshold {pass_threshold} with no critical blockers; "
+            "see the executive summary and recommendation ladder for conditions."
         )
     if verdict == "proceed_with_conditions":
         crit_text = f"{critical} critical blocker{'s' if critical != 1 else ''}" if critical else None
         high_text = f"{high} high-severity issue{'s' if high != 1 else ''}" if high else None
         constraints = ", ".join(t for t in (crit_text, high_text) if t) or "outstanding high-severity issues"
         return (
-            f"Score is acceptable but {constraints} must close before close — "
-            "see the recommendation ladder for the conditions."
+            f"Score {score} ≥ pass threshold {pass_threshold} but {constraints} must close before close. "
+            "See the recommendation ladder for the conditions."
         )
     if verdict == "defer":
         return (
-            "Score is below the acquisition bar. Defer until the seller closes "
-            "the issues in §3 and re-runs assessment."
+            f"Score {score} falls {gap} points short of the acquisition pass threshold {pass_threshold}. "
+            "Defer until the seller closes the gap (see §3 and the gap-analysis section) and re-runs assessment."
         )
     return (
-        "Score and blocker profile fall below the diligence bar. Recommend "
-        "decline; the integration cost dominates expected upside."
+        f"Score {score} is {gap} points below the acquisition pass threshold {pass_threshold}; "
+        f"{critical} critical blocker(s) gate the recommendation per the verdict rule. "
+        "See the executive summary for the decision rule and the recommendation ladder for the path forward."
     )
 
 
