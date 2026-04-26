@@ -156,18 +156,27 @@ def risk_matrix(
     width: int = 480,
     height: int = 360,
     title: str = "Risk matrix — likelihood × impact",
+    x_label: str = "Likelihood",
+    y_label: str = "Impact",
+    quadrant_labels: tuple[str, str, str, str] = (
+        "Low likelihood · High impact",
+        "High likelihood · High impact",
+        "Low likelihood · Low impact",
+        "High likelihood · Low impact",
+    ),
 ) -> str:
-    """Plot risks on a likelihood (x) × impact (y) grid."""
+    """Plot risks on an axis × axis grid.
+
+    Axis and quadrant labels are caller-supplied so persona deliverables
+    can frame the same data in their reader's voice (e.g., a VC sees
+    "Likelihood we encounter in diligence" / "Downside to thesis"
+    instead of the generic "Likelihood / Impact").
+    """
     return _plot_matrix(
         points=risks,
-        x_label="Likelihood",
-        y_label="Impact",
-        quadrant_labels=(
-            "Low likelihood · High impact",
-            "High likelihood · High impact",
-            "Low likelihood · Low impact",
-            "High likelihood · Low impact",
-        ),
+        x_label=x_label,
+        y_label=y_label,
+        quadrant_labels=quadrant_labels,
         width=width,
         height=height,
         title=title,
@@ -180,18 +189,26 @@ def effort_impact_matrix(
     width: int = 480,
     height: int = 360,
     title: str = "Remediation tasks — effort × score impact",
+    x_label: str = "Effort",
+    y_label: str = "Score impact",
+    quadrant_labels: tuple[str, str, str, str] = (
+        "Low effort · High impact (DO FIRST)",
+        "High effort · High impact",
+        "Low effort · Low impact",
+        "High effort · Low impact (DEFER)",
+    ),
 ) -> str:
-    """Plot remediation tasks on effort (x) × score-lift impact (y) grid."""
+    """Plot tasks on a caller-framed effort × score-lift grid.
+
+    Default labels match the engineering-triage frame; persona builders
+    override to surface the right vocabulary (e.g., for an investor:
+    "Founder time to address" vs "Thesis credibility lift").
+    """
     return _plot_matrix(
         points=tasks,
-        x_label="Effort",
-        y_label="Score impact",
-        quadrant_labels=(
-            "Low effort · High impact (DO FIRST)",
-            "High effort · High impact",
-            "Low effort · Low impact",
-            "High effort · Low impact (DEFER)",
-        ),
+        x_label=x_label,
+        y_label=y_label,
+        quadrant_labels=quadrant_labels,
         width=width,
         height=height,
         title=title,
