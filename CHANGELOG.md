@@ -6,14 +6,84 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Roadmap (post-v0.9.0 ideas)
+### Roadmap (post-v0.10.0)
 
-- ed25519 signing for profile packs (replace HMAC v1 trust model with asymmetric crypto)
-- Web UI for browsing the report and remediation plan interactively
-- Plugin system for third-party detector packs without forking the repo
-- Streamed LLM narration (typewriter UX) instead of single-shot calls
-- Automatic dedupe family inference from finding statements (NLP-based grouping)
-- Per-emphasis builder customisation via plugin entry-points (let downstream profiles ship their own narrative-block builders)
+- Wire the existing 5 SAST adapters (`semgrep`, `bandit`, `eslint`, `ruff`, `cargo-audit` at `sdlc_assessor/detectors/sast/`) into the RSF D1.2 / D2.3 scorers. The adapters run today but their findings flow into the legacy `findings` array; they don't reach the RSF scoring layer. ~1 day; closes 2 RSF criteria from `?` to real anchors.
+- OSV-Scanner / pip-audit / npm-audit adapter for D2.1 (CVE / OSV) — currently `?`.
+- GitHub API integration for D2.4 (branch protection), D5.1 (PR review depth), D5.2 (CI green rate), D7.3 (issue / PR responsiveness) — currently all `?`.
+- DORA-metric history walk for D4.1–D4.4 (deployment frequency, lead time, change failure rate, recovery time) — currently all `?`.
+- SBOM generation via `syft` / `cyclonedx-py` — currently D3.1 only file-presence-checks.
+- Real test-coverage analysis (parse `coverage.xml` / `nyc` / `lcov.info`) — D1.1 currently `?`.
+- Persona-distinct body artifacts: license-compliance matrix (acquisition); pitch-claims ingestion CLI (VC); DORA dashboard (engineering); machine-readable JSON manifest (remediation agent).
+- Stale-code cleanup: remove unreachable `_decomposition.py`, `_gap.py`, the legacy threshold keys in `use_case_profiles.json`.
+- Spec-doc cleanup: update `docs/ANALYSIS.md` / `docs/ACTION_PLAN.md` / `docs/SDLC_Framework_v2_Spec.md` / `docs/scoring_engine_spec.md` to point at RSF as canonical, or banner them as historical.
+- ed25519 signing for profile packs (replace HMAC v1 trust model with asymmetric crypto).
+- Web UI for browsing the report and remediation plan interactively.
+- Plugin system for third-party detector packs without forking the repo.
+- Streamed LLM narration (typewriter UX) instead of single-shot calls.
+
+### Roadmap (gated on user actions — required for industry-quality v1)
+
+- **Calibration corpus** (≥50 outcome-linked entries). User must source / partner. Engineering: corpus schema, ingestion CLI, backtest harness.
+- **Persona-user research framework** (interview discussion guides + ≥6 reviewers per persona × 4+ personas). User must recruit / conduct.
+- **Methodology peer review** (≥2 external reviewers; academic + industry). User must engage.
+- **Cost-frame calibration** with sourced labor data (BLS / Levels.fyi / contributed CSVs). User must license / source.
+- **Outcome / benchmark publication** for assessor's calibration to be auditable by users.
+
+## [0.10.0] - Unreleased
+
+**Major substrate rework.** Replaces the self-authored 0–100 scoring rubric with the user-provided **Repository Scoring Framework (RSF) v1.0** — every threshold and level anchor is now sourced from a published industry framework (NIST SSDF, DORA, OWASP ASVS, OWASP Top 10, CWE Top 25, SLSA, CycloneDX/SPDX, Sigstore, ISO/IEC 27001, AICPA SOC 2, CSA CAIQ, OpenSSF Scorecard, OpenSSF Best Practices Badge, SPACE, CHAOSS).
+
+This release also rebuilds the persona deliverable layer: each of the four use-case reports now emits structurally distinct sections + persona-contextual translation of the lowest-scored RSF findings into the reader's lens (investment / liability / sprint / imperative).
+
+### Added
+
+- **RSF v1.0 framework.** `docs/frameworks/rsf_v1.0.md` is the user's verbatim canonical spec; `sdlc_assessor/rsf/` codifies it: 8 dimensions (`criteria.py`), 31 sub-criteria with 6 level anchors each (verbatim from RSF §2), 8 personas with weight matrix (verbatim from §3), aggregation per RSF §4 (`D_i = mean(s_ij)`, `T = Σ D_i × w_i`, `T_% = T/500 × 100`), and confidence flagging per §4. New tests: `test_rsf_framework.py` verifies every level anchor in code appears verbatim in the doc; `test_rsf_scorers.py` covers per-criterion scorers.
+- **Per-criterion scorers.** `sdlc_assessor/rsf/scorers.py` implements 31 scorers, one per RSF sub-criterion. Discipline rule per RSF §1: score 0 only when *absence is observable* (no LICENSE, no SBOM, no tests); score `?` when the criterion needs evidence the current pipeline doesn't gather (line coverage %, DORA metrics, branch protection, etc.); never invent a score from partial evidence. As of 0.10.0: 14 of 31 sub-criteria score against real anchors; 17 return `?` (the framework-correct disclosure).
+- **Persona-distinct deliverables.** Replaces the prior single-template HTML with 4 builders (`acquisition.py`, `vc.py`, `engineering.py`, `remediation.py`) under `sdlc_assessor/renderer/deliverables/`. Each emits a structurally different document via the `Deliverable` dataclass (`base.py`).
+- **Persona-contextual translation of RSF top-5 findings.** `_persona_translations.py` carries hand-authored translations for the 13 high-frequency RSF criteria × 4 personas = 52 entries. Each carries `consequence` (what this finding means in the persona's frame), `action` (what to do about it), and `framework_ref` (the published framework being cited — the audit trail proving the consequence isn't invented). Rendered as color-coded translation cards in the report body.
+- **Provenance header.** `_provenance.py` emits a sticky banner at the top of every report: project name, source URL, commit SHA, branch, scan timestamp UTC, scorer version, classifier output, inventory snapshot. Sticky `position: sticky` with solid background + drop shadow + backdrop-blur so body content can't bleed through when scrolling. Persona badge embedded so the reader never forgets which version they're reading.
+- **Methodology + glossary + citations.** `_methodology.py` describes the RSF formula + multipliers + verdict-rule table + calibration-set guidance per RSF §5; cites `docs/frameworks/rsf_v1.0.md` directly. `CitationRegistry` (`_citations.py`) hands out monotonic footnote numbers; deliverable-html renders inline `<sup class="cite">` markers + a back-of-document footnote list.
+- **SVG chart primitives.** `sdlc_assessor/renderer/deliverables/charts/` ships pure-Python generators for score gauge, capability radar (with optional baseline polygon), risk matrix (likelihood × impact), effort × impact matrix, and score-lift trajectory. No external dependencies.
+- **Real signals from `git_summary`.** `git_history.py` now collects `tag_count`, `commits_last_30/90/180/365_days`. The RSF D7.1 scorer reads `top_authors[0].share` directly (the literal RSF level-0 anchor: "Single contributor authored >80%"); D7.2 maps the commit-window data to weekly cadence; D5.4 reads tag count for level 1+ and detects release-please / semantic-release / changesets / SLSA workflows for level 4+. Real differentiation between assets: this repo (single author 94%) scores D7.1=0; AgentSentry (3 contributors, top 47%) scores D7.1=2.
+- **`--d8-not-applicable` CLI flag.** Marks all D8 (compliance & governance) sub-criteria as `N/A` rather than `?` for assets that are genuinely out of compliance scope (per RSF §1).
+- **`--narrator deterministic|llm|both` CLI flag** (default `deterministic`). Structurally wired through to the renderer; the `llm` and `both` modes are not yet fully integrated with the persona narrative blocks (deferred).
+- **`--repo-name` / `--repo-url` CLI overrides** for the provenance banner. Defaults read from `git config remote.origin.url` and `git rev-parse HEAD`; falls back to "local path: <abs> (no git origin)" with explicit disclosure when not in a git checkout.
+
+### Changed
+
+- **Legacy substrate removed from rendered output.** The legacy `pass_threshold` / `distinction_threshold` / "diligence bar" / "score N points below" language is gone from cover rationales, exec summaries, methodology box, glossary, and section anchors. Verified by grep: 0 occurrences of 9 legacy phrases across rendered reports.
+- **Cover-page rationale rewritten in persona language.** Acquisition reads acquisition language ("escrow conditions", "purchase-price adjustments"); VC reads investment language ("tranche capital release", "valuation discount"); engineering reads sprint language ("next sprint's must-ship"); remediation reads agent language ("execute phases 1→5; halt on regression"). None cite the legacy threshold.
+- **Methodology box describes RSF aggregation, not the legacy multiplier chain.** Cites the RSF spec directly; lists the 13+ published frameworks the criteria anchor to.
+- **Glossary leads with RSF terms** (`persona-weighted total (T_%)`, `dimension score (D_i)`, `unverified (?)`) and cites `docs/frameworks/rsf_v1.0.md`. Legacy multiplier-chain entries (`severity_weight`, `confidence_multiplier`, etc.) removed.
+- **Score decomposition + gap analysis sections removed from rendered output.** Their math used the legacy 0–100 rubric that RSF supersedes; rendering them next to the RSF block contradicted the framework. The unreachable modules (`_decomposition.py`, `_gap.py`) remain on disk; they're slated for removal in a follow-up cleanup commit.
+
+### Fixed
+
+- Sticky-banner transparency: body content was bleeding through the provenance header when scrolling. Now: solid background + drop shadow + backdrop-filter blur + z-index 1000.
+- Duplicate persona-paragraph: `_render_section` emitted `section.summary` AND `_render_prose` re-emitted `section.narrative_block.summary` as a fallback. Removed the duplicate fallback.
+- Lost `_vocab.py` + `matrix.py` axis-label parameters: created during the persona-vocabulary pass but never staged in the original commit, leaving the persona builders with import-time dependencies on untracked files (a fresh-clone test would have hit ImportError).
+- D7.1 / D7.2 / D5.4 / D7.4 ignored richer evidence in `git_summary`: D7.1 wasn't reading `top_authors[0].share`; D7.2 wasn't reading the new commit-window fields; D5.4 wasn't checking `tag_count`; D7.4 wasn't using `len(top_authors)`. Fixed.
+
+### Documentation
+
+- `docs/frameworks/rsf_v1.0.md` — **canonical scoring framework** (user-provided, verbatim).
+- `docs/frameworks/cwe_cvss.md` — background research on CWE Top 25 + CVSS v3.1 (committed during the framework-research phase before the user provided RSF).
+- `docs/frameworks/dora.md` — background research on DORA metrics (same phase).
+- `docs/HANDOFF.md` — comprehensive handoff document for continuing work in another session. ~1100 lines, 30 sections covering session chronology, pipeline data flow, CLI reference, detector inventory, subcategory taxonomy, profile system, profile signing, LLM narrator, compare mode, test fixtures, stale code, speculative values still in code, external tool dependencies, code conventions, file map, glossary.
+
+### Known limitations (these are scope gaps, not release polish)
+
+- **17 of 31 RSF sub-criteria currently return `?`** because the detector pipeline doesn't yet collect the evidence those criteria require. Real-world assets score in the 3–10% range across personas not because they're bad but because the assessor only measures ~45% of what RSF requires. The math obeys RSF §1 ("`?` treated as 0") but the result is uninformative as a *complete* diligence document until the detectors expand.
+- **The 5 SAST adapters (`detectors/sast/`) are built but not wired into RSF D1.2 / D2.3 scoring.** This is the highest-leverage 1-day fix in the post-v0.10.0 backlog.
+- **The original spec docs (`docs/ANALYSIS.md`, `docs/ACTION_PLAN.md`, `docs/SDLC_Framework_v2_Spec.md`, `docs/scoring_engine_spec.md`) describe a self-authored rubric** that is now superseded by RSF. They have not yet been updated.
+- **The legacy 0–100 scoring engine (`sdlc_assessor/scorer/engine.py`) still runs** in the pipeline for back-compat. Its output (`scoring.overall_score`, `scoring.verdict`) is no longer surfaced in the persona reports but remains in `scored.json`. Retirement is in the post-v0.10.0 backlog.
+- **Some speculative values remain in code**: `_VC_BASELINE` ratios in `vc.py`, `_EFFORT_VALUE` in `engineering.py`, the planner's `expected_score_delta` formula constants, and the 4-way verdict in `derive_recommendation()`. None are anchored to RSF or any published framework. Cleanup deferred.
+- **Industry-quality v1 (the user's stated v1 bar) is NOT what this release is.** v1 requires a real outcome-linked corpus (≥50 entries), persona-user research interviews (≥6 per persona × 4 personas), and methodology peer review (≥2 external reviewers). Those are explicitly user-action gated and cannot ship in a code-only release. v0.10.0 is the framework-anchored substrate the v1 calibration / research / review work would build on.
+
+### Tests
+
+399 passed, 1 skipped on a clean run. Adds 21 RSF framework integrity tests, 44 per-criterion scorer tests, 13 persona-translation tests, plus the integration-test rewrite for the RSF substrate. Includes regression tests against the legacy substrate (asserts the legacy phrases / sections / glossary entries are gone from rendered output).
 
 ## [0.9.0] - 2026-04-26
 
