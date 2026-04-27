@@ -21,6 +21,7 @@ from sdlc_assessor.renderer.charts import (
     score_lift_trajectory,
 )
 from sdlc_assessor.renderer.charts.trajectory import PhaseLift
+from sdlc_assessor.renderer.deliverables._vocab import REMEDIATION_VOCAB
 from sdlc_assessor.renderer.deliverables.base import (
     CoverPage,
     Deliverable,
@@ -36,7 +37,6 @@ from sdlc_assessor.renderer.deliverables.base import (
     register_deliverable_builder,
     score_band,
 )
-from sdlc_assessor.renderer.deliverables._vocab import REMEDIATION_VOCAB
 from sdlc_assessor.renderer.persona import narrate_for_persona
 
 _VOCAB = REMEDIATION_VOCAB

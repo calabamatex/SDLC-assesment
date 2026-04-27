@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import sdlc_assessor
-
 from sdlc_assessor.renderer.deliverables.base import ProvenanceHeader
 
 
@@ -90,7 +89,7 @@ def collect_provenance(
         # against this by checking whether the git toplevel matches the
         # repo_path we were asked about.
         toplevel = _run_git(["rev-parse", "--show-toplevel"], cwd=repo_path)
-        is_own_repo = bool(toplevel) and Path(toplevel).resolve() == repo_path
+        is_own_repo = toplevel is not None and Path(toplevel).resolve() == repo_path
         origin_raw = (
             _run_git(["config", "--get", "remote.origin.url"], cwd=repo_path)
             if is_own_repo

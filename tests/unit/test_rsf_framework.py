@@ -34,7 +34,6 @@ from sdlc_assessor.rsf.aggregate import (
 from sdlc_assessor.rsf.criteria import criteria_for_dimension
 from sdlc_assessor.rsf.personas import persona_by_id
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RSF_DOC = REPO_ROOT / "docs" / "frameworks" / "rsf_v1.0.md"
 

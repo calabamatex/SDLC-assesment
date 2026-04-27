@@ -16,7 +16,6 @@ from sdlc_assessor.renderer.deliverables._methodology import (
     methodology_for,
 )
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 

@@ -24,7 +24,6 @@ from sdlc_assessor.rsf.personas import (
     persona_weights_redistributed,
 )
 
-
 # Sentinels for special values. Using strings rather than None so the
 # JSON output is unambiguous.
 NOT_APPLICABLE = "N/A"

@@ -20,6 +20,7 @@ from sdlc_assessor.renderer.charts import (
 )
 from sdlc_assessor.renderer.charts.matrix import MatrixPoint
 from sdlc_assessor.renderer.charts.trajectory import PhaseLift
+from sdlc_assessor.renderer.deliverables._vocab import ENGINEERING_VOCAB
 from sdlc_assessor.renderer.deliverables.base import (
     CoverPage,
     Deliverable,
@@ -33,12 +34,10 @@ from sdlc_assessor.renderer.deliverables.base import (
     critical_blockers,
     derive_recommendation,
     high_blockers,
-    production_findings,
     register_deliverable_builder,
     score_band,
     top_findings,
 )
-from sdlc_assessor.renderer.deliverables._vocab import ENGINEERING_VOCAB
 from sdlc_assessor.renderer.persona import narrate_for_persona
 
 _VOCAB = ENGINEERING_VOCAB

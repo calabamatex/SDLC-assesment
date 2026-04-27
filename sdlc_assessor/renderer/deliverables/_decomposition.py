@@ -223,10 +223,9 @@ def build_score_decomposition(
         applicability = "applicable" if applicable else "not_applicable"
         multiplier = float(multipliers.get(cat, 1.0))
 
-        if applicable:
-            normalized_weight = round(100.0 * applicable_cats[cat] / denominator)
-        else:
-            normalized_weight = 0
+        normalized_weight = (
+            round(100.0 * applicable_cats[cat] / denominator) if applicable else 0
+        )
 
         deductions = (
             _per_finding_deductions(

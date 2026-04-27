@@ -97,9 +97,7 @@ def category_radar(
         lx, ly = _polar_to_xy(cx, cy, r_outer + 14, angles[i])
         # Anchor label sensibly relative to position around the circle.
         ang_deg = (math.degrees(angles[i]) % 360 + 360) % 360
-        if 60 <= ang_deg <= 120:
-            anchor = "middle"
-        elif 240 <= ang_deg <= 300:
+        if 60 <= ang_deg <= 120 or 240 <= ang_deg <= 300:
             anchor = "middle"
         elif ang_deg < 90 or ang_deg > 270:
             anchor = "start"

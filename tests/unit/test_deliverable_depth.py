@@ -16,15 +16,12 @@ and asserts the user's specific complaints are addressed:
 
 from __future__ import annotations
 
-import json
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-
 
 PERSONAS = ["acquisition_diligence", "vc_diligence", "engineering_triage", "remediation_agent"]
 

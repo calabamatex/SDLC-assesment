@@ -26,6 +26,7 @@ from sdlc_assessor.renderer.charts import (
     score_gauge,
 )
 from sdlc_assessor.renderer.charts.matrix import MatrixPoint
+from sdlc_assessor.renderer.deliverables._vocab import ACQUISITION_VOCAB
 from sdlc_assessor.renderer.deliverables.base import (
     CoverPage,
     Deliverable,
@@ -38,14 +39,11 @@ from sdlc_assessor.renderer.deliverables.base import (
     classification_line,
     critical_blockers,
     derive_recommendation,
-    finding_rank,
     high_blockers,
-    production_findings,
     register_deliverable_builder,
     score_band,
     top_findings,
 )
-from sdlc_assessor.renderer.deliverables._vocab import ACQUISITION_VOCAB
 from sdlc_assessor.renderer.persona import narrate_for_persona
 
 _VOCAB = ACQUISITION_VOCAB
@@ -610,7 +608,7 @@ def _build_recommendation_ladder(
         options.append(
             RecommendationOption(
                 verdict="proceed_with_conditions",
-                condition=f"Phase-1 remediation (security) committed in 30 days post-close.",
+                condition="Phase-1 remediation (security) committed in 30 days post-close.",
                 expected_score_after=min(100, score + 5),
                 rationale="Bridge the gap with contractual remediation milestones.",
             )

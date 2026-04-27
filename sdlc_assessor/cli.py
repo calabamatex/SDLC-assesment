@@ -17,7 +17,6 @@ from sdlc_assessor.renderer.deliverable_html import render_html_report
 from sdlc_assessor.renderer.deliverables._provenance import collect_provenance
 from sdlc_assessor.renderer.markdown import render_markdown_report
 from sdlc_assessor.rsf import assess_repository as rsf_assess
-from sdlc_assessor.rsf.aggregate import RSFAssessment
 from sdlc_assessor.scorer.engine import score_evidence
 
 # Fallbacks when the classifier cannot infer a maturity or archetype but the

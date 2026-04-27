@@ -27,7 +27,6 @@ from sdlc_assessor.renderer.deliverables._persona_translations import (
     translation_for,
 )
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 

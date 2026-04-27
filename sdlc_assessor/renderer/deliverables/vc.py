@@ -24,6 +24,7 @@ from sdlc_assessor.renderer.charts import (
     score_gauge,
 )
 from sdlc_assessor.renderer.charts.matrix import MatrixPoint
+from sdlc_assessor.renderer.deliverables._vocab import VC_VOCAB
 from sdlc_assessor.renderer.deliverables.base import (
     CoverPage,
     Deliverable,
@@ -42,7 +43,6 @@ from sdlc_assessor.renderer.deliverables.base import (
     score_band,
     top_findings,
 )
-from sdlc_assessor.renderer.deliverables._vocab import VC_VOCAB
 from sdlc_assessor.renderer.persona import narrate_for_persona
 
 _VOCAB = VC_VOCAB

@@ -90,7 +90,7 @@ def score_lift_trajectory(
         )
 
     # Current score bar.
-    y = margin_top
+    y: float = float(margin_top)
     band = band_for(current)
     parts.append(
         f'<rect x="{margin_left}" y="{y}" '

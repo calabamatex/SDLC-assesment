@@ -46,7 +46,7 @@ an organisation degrades gracefully instead of crashing.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 

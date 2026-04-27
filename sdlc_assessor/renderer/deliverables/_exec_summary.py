@@ -24,7 +24,6 @@ from __future__ import annotations
 from sdlc_assessor.renderer.deliverables._citations import CitationRegistry
 from sdlc_assessor.renderer.deliverables.base import Deliverable, RecommendationVerdict
 
-
 # ---------------------------------------------------------------------------
 # Persona frame: how to translate RSF findings into THIS reader's language
 # ---------------------------------------------------------------------------
@@ -213,14 +212,14 @@ def build_executive_summary(
     # ---- paragraph 2: evidence coverage + lowest scored sub-criterion ----
     if bottom is None:
         paragraph_2 = (
-            f"No RSF sub-criterion scored against the rubric in this run — "
-            f"every criterion currently returns `?` (unverified). That is the "
-            f"framework-correct disclosure when the assessor has not yet "
-            f"collected the evidence each criterion requires; closing those "
-            f"gaps (DORA-metric collection, OSV scanning, GitHub Settings API "
-            f"integration) unlocks real scores. Per RSF §1, `?` is treated "
-            f"as 0 in the math but flagged separately so the reader can "
-            f"distinguish absent from unverified."
+            "No RSF sub-criterion scored against the rubric in this run — "
+            "every criterion currently returns `?` (unverified). That is the "
+            "framework-correct disclosure when the assessor has not yet "
+            "collected the evidence each criterion requires; closing those "
+            "gaps (DORA-metric collection, OSV scanning, GitHub Settings API "
+            "integration) unlocks real scores. Per RSF §1, `?` is treated "
+            "as 0 in the math but flagged separately so the reader can "
+            "distinguish absent from unverified."
         )
     else:
         bottom_marker = citations.cite(

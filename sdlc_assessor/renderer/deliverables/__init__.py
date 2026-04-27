@@ -6,6 +6,12 @@ dispatcher in :mod:`sdlc_assessor.renderer.deliverables.base`.
 
 from __future__ import annotations
 
+from sdlc_assessor.renderer.deliverables import (  # noqa: F401  — registers builders
+    acquisition,
+    engineering,
+    remediation,
+    vc,
+)
 from sdlc_assessor.renderer.deliverables.base import (
     CategoryArithmetic,
     Citation,
@@ -27,12 +33,6 @@ from sdlc_assessor.renderer.deliverables.base import (
     deliverable_to_dict,
     register_deliverable_builder,
     registered_deliverables,
-)
-from sdlc_assessor.renderer.deliverables import (  # noqa: F401  — registers builders
-    acquisition,
-    engineering,
-    remediation,
-    vc,
 )
 
 __all__ = [

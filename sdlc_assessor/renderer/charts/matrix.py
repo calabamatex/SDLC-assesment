@@ -14,7 +14,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sdlc_assessor.renderer.charts._palette import (
-    ACCENT,
     BG_ALT,
     GRID,
     INK,

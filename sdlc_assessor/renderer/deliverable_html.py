@@ -28,8 +28,7 @@ script kept inline so the report works offline.
 from __future__ import annotations
 
 import html as _html
-import warnings
-from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sdlc_assessor.normalizer.findings import is_fixture_finding
@@ -876,7 +875,7 @@ def _render_tasks_table(section) -> str:
     )
 
 
-def _render_options(options: list[dict | RecommendationOption]) -> str:
+def _render_options(options: Sequence[dict | RecommendationOption]) -> str:
     rows: list[str] = []
     for opt in options:
         if isinstance(opt, RecommendationOption):
@@ -1137,10 +1136,11 @@ def _render_rsf_assessment(scored: dict, deliverable: Deliverable) -> str:
     dim_rows: list[str] = []
     for d in dims:
         mean = d.get("mean")
-        if mean is None:
-            score_cell = '<span class="muted">N/A</span>'
-        else:
-            score_cell = f"{mean:.2f} <span class=\"muted\">/ 5</span>"
+        score_cell = (
+            '<span class="muted">N/A</span>'
+            if mean is None
+            else f'{mean:.2f} <span class="muted">/ 5</span>'
+        )
         flag = ""
         if d.get("confidence_flagged"):
             flag = (

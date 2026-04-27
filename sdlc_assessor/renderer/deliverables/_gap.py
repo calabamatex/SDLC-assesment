@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from sdlc_assessor.renderer.deliverables.base import GapAnalysis, ScoreDecomposition
 
-
 _PHASE_ORDER = [
     "phase_1_security",
     "phase_2_contracts",
