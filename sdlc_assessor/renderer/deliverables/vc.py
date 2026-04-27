@@ -87,11 +87,8 @@ def build(scored: dict, profile: dict) -> Deliverable:
         recommendation=recommendation_verdict,
         recommendation_rationale=_rationale(
             recommendation_verdict,
-            score,
             len(crit),
             len(high),
-            pass_threshold=pass_threshold,
-            distinction_threshold=distinction_threshold,
         ),
         score=score,
         score_band=score_band(score),
@@ -171,34 +168,38 @@ def _subtitle(verdict: str, score: int) -> str:
 
 def _rationale(
     verdict: str,
-    score: int,
     critical: int,
     high: int,
-    *,
-    pass_threshold: int = 72,
-    distinction_threshold: int = 88,
 ) -> str:
-    """VC cover rationale. Names the bar, the gap, and the rule that fired."""
-    gap = pass_threshold - score
+    """VC cover rationale, framed in investment-thesis language.
+
+    Post-RSF: no made-up `pass_threshold`. The RSF assessment below
+    surfaces the VC-row weighted total against the published §3 matrix.
+    """
     if verdict == "proceed":
         return (
-            f"Score {score} ≥ pass threshold {pass_threshold} (vc_diligence) with no critical blockers; "
-            "thesis is substantiated by the code evidence."
+            "Code substantiates the pitched technical claims with no critical "
+            "blockers; the RSF assessment below quantifies thesis credibility. "
+            "Investment recommended subject to commercial diligence."
         )
     if verdict == "proceed_with_conditions":
         return (
-            f"Score {score} ≥ pass threshold {pass_threshold} but {critical} critical and {high} high issues "
-            "puncture the thesis; tranche the round against milestone closure."
+            f"Substantiation is partial: {critical} critical and {high} high issues "
+            "puncture specific thesis claims (see RSF top-priorities below). "
+            "Conditional invest — tranche capital release against milestone closure "
+            "or apply valuation discount commensurate with remediation cost."
         )
     if verdict == "defer":
         return (
-            f"Score {score} falls {gap} points short of the vc_diligence pass threshold {pass_threshold}. "
-            "Defer term-sheet pending founder Q&A and a re-run after fixes."
+            "Thesis under-substantiated relative to investable baselines. Defer "
+            "term-sheet pending founder Q&A on the lowest-scored RSF sub-criteria "
+            "below, plus a re-run after seller-funded remediation."
         )
     return (
-        f"Score {score} is {gap} points below the vc_diligence pass threshold {pass_threshold}; "
-        f"{critical} critical blocker(s) materially contradict the pitch. "
-        "Decline at proposed terms; revisit at a re-priced round if seller closes the gap."
+        f"{critical} critical blocker(s) materially contradict pitched claims; "
+        "code evidence does not back the headline thesis. Decline at proposed "
+        "terms; revisit at a re-priced round if seller closes the items in the "
+        "RSF assessment below."
     )
 
 

@@ -69,9 +69,7 @@ def build(scored: dict, profile: dict) -> Deliverable:
         title="Engineering Health Report",
         subtitle=_subtitle(score, verdict, len(crit), len(high)),
         recommendation=recommendation_verdict,
-        recommendation_rationale=_health_rationale(
-            score, len(crit), len(high), pass_threshold=pass_threshold
-        ),
+        recommendation_rationale=_health_rationale(len(crit), len(high)),
         score=score,
         score_band=score_band(score),
         headline_facts=_cover_facts(scored),
@@ -134,30 +132,30 @@ def _subtitle(score: int, verdict: str, crit: int, high: int) -> str:
     return f"Health band: {band} · score {score}/100 · verdict {verdict} · {severity_summary}."
 
 
-def _health_rationale(
-    score: int, crit: int, high: int, *, pass_threshold: int = 70
-) -> str:
-    """Engineering cover rationale. Names the engineering_triage threshold + gap."""
-    gap = pass_threshold - score
+def _health_rationale(crit: int, high: int) -> str:
+    """Engineering cover rationale, in sprint-allocation language.
+
+    Post-RSF: no made-up `pass_threshold`. The RSF assessment below
+    surfaces the CTO/VP-Eng-row weighted total against the published §3
+    matrix and the per-dimension means.
+    """
     if crit:
         return (
-            f"Score {score} (engineering_triage pass threshold {pass_threshold}); "
-            f"{crit} critical blocker(s) dominate health. Fix Phase 1 (security) "
-            "before any other engineering work — it's the highest-value lift."
-        )
-    if score < pass_threshold:
-        return (
-            f"Score {score} sits {gap} points below the engineering_triage pass threshold {pass_threshold}. "
-            "Health is salvageable but requires concentrated work; see §4 for the effort × impact triage."
+            f"{crit} critical blocker(s) dominate health right now. Phase 1 "
+            "(security) is the next sprint's must-ship — see the RSF "
+            "assessment below for which sub-criteria drive that phase. "
+            "Defer feature work until those land."
         )
     if high:
         return (
-            f"Score {score} clears the engineering_triage pass threshold {pass_threshold}, "
-            f"but {high} high-severity issue(s) remain — next sprint's work, not crisis-level."
+            f"No critical blockers, but {high} high-severity issue(s) remain. "
+            "Plan them into next sprint or two; the RSF top-priorities table "
+            "shows which ones map to the lowest dimension scores."
         )
     return (
-        f"Score {score} ≥ engineering_triage pass threshold {pass_threshold} with no hard blockers. "
-        "Codebase is in healthy shape; treat this report as a maintenance baseline."
+        "No hard blockers and the RSF assessment below shows steady-state "
+        "discipline. Treat this report as the maintenance baseline; re-run "
+        "quarterly per the RSF cadence."
     )
 
 

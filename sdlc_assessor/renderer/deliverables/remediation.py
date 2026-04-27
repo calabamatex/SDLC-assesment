@@ -66,10 +66,10 @@ def build(scored: dict, profile: dict) -> Deliverable:
         subtitle=_subtitle(score, verdict, len(crit)),
         recommendation=recommendation_verdict,
         recommendation_rationale=(
-            f"Score {score} (remediation_agent calibration target: pass {pass_threshold}, "
-            f"distinction {distinction_threshold}). Execute phases 1→5 in order; commit "
-            "per task; verify after each phase. Re-run the assessor between phases to confirm "
-            "score deltas land within ±25% of the projection in §4."
+            "Execute phases 1→5 in order; commit per task; verify after each "
+            "phase. Re-run the RSF assessment between phases — observed sub-"
+            "criterion deltas should align with the RSF anchors below. Halt "
+            "and re-plan if any sub-criterion regresses between phases."
         ),
         score=score,
         score_band=score_band(score),

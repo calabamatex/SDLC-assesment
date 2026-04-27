@@ -66,32 +66,21 @@ def rendered_reports(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]
 # ---------------------------------------------------------------------------
 
 
-def test_every_persona_shows_its_pass_threshold_with_number(rendered_reports: dict[str, str]) -> None:
-    """The pass threshold must appear as a literal number in each report.
-
-    The user explicitly asked: 'What is the diligence bar exactly?' —
-    the answer must be a visible numeric token, not a paraphrase.
-    """
-    expected = {
-        "acquisition_diligence": 74,
-        "vc_diligence": 72,
-        "engineering_triage": 70,
-        "remediation_agent": 70,
-    }
-    for use_case, threshold in expected.items():
-        html = rendered_reports[use_case]
-        assert (
-            f"<strong>{threshold}</strong>" in html
-            or f"pass_threshold {threshold}" in html
-            or f"pass threshold {threshold}" in html
-        ), f"{use_case} did not surface pass threshold {threshold} in numeric form"
-
-
-def test_every_persona_cites_use_case_profiles_json(rendered_reports: dict[str, str]) -> None:
-    """Each report must cite the profile path where its threshold lives."""
+def test_every_persona_shows_rsf_persona_total(rendered_reports: dict[str, str]) -> None:
+    """Each report's RSF block must show the persona-weighted total %."""
     for use_case, html in rendered_reports.items():
-        assert "use_case_profiles.json" in html, (
-            f"{use_case} did not cite use_case_profiles.json — threshold is ungrounded"
+        # The RSF block renders the per-persona total table; every persona row
+        # carries '<strong>NN.N%</strong>'.
+        assert re.search(r"<strong>\d+\.\d%</strong>", html), (
+            f"{use_case} report does not surface any RSF persona total"
+        )
+
+
+def test_every_persona_cites_rsf_canonical_doc(rendered_reports: dict[str, str]) -> None:
+    """Each report must cite the RSF v1.0 canonical doc as the source."""
+    for use_case, html in rendered_reports.items():
+        assert "rsf_v1.0.md" in html or "Repository Scoring Framework" in html, (
+            f"{use_case} does not cite the RSF canonical doc"
         )
 
 
@@ -104,73 +93,103 @@ def test_user_flagged_sentence_is_gone(rendered_reports: dict[str, str]) -> None
         )
 
 
-# ---------------------------------------------------------------------------
-# Recommendation grounding
-# ---------------------------------------------------------------------------
-
-
-def test_every_persona_names_the_verdict_rule(rendered_reports: dict[str, str]) -> None:
-    """The exec summary must spell out which rule branch fired."""
+def test_no_legacy_pass_threshold_language(rendered_reports: dict[str, str]) -> None:
+    """Post-RSF, the report must not say 'pass_threshold X' or 'falls N points below'."""
+    legacy_phrases = (
+        "pass_threshold 7",     # catches "pass_threshold 70/72/74"
+        "pass threshold 7",     # space variant
+        "points below the",     # legacy gap phrasing
+        "points short of the",
+        "use_case_profiles.json:",  # legacy citation
+    )
     for use_case, html in rendered_reports.items():
-        # The exec summary uses 'Rule:' to introduce the branch text.
-        assert "Rule: " in html, f"{use_case} exec summary did not name a verdict rule"
+        for phrase in legacy_phrases:
+            assert phrase not in html, (
+                f"{use_case} still contains legacy threshold language: "
+                f"{phrase!r}"
+            )
 
 
-def test_recommendation_rationale_names_pass_threshold(rendered_reports: dict[str, str]) -> None:
-    """Cover-page rationale must name the threshold + gap, not handwave."""
-    expected_threshold = {
-        "acquisition_diligence": 74,
-        "vc_diligence": 72,
-        "engineering_triage": 70,
-        "remediation_agent": 70,
-    }
+# ---------------------------------------------------------------------------
+# RSF assessment grounding
+# ---------------------------------------------------------------------------
+
+
+def test_rsf_block_present_in_every_report(rendered_reports: dict[str, str]) -> None:
     for use_case, html in rendered_reports.items():
-        # The rationale lives in the .recommendation .rationale div.
-        m = re.search(r'class="rationale"[^>]*>([^<]+)', html)
-        assert m, f"{use_case} has no .rationale div"
-        rationale = m.group(1)
-        threshold = expected_threshold[use_case]
-        # We accept any phrasing that includes the threshold number near the word
-        # 'threshold' or 'pass' — the test is for grounding, not exact wording.
-        assert re.search(rf"\b{threshold}\b", rationale), (
-            f"{use_case} rationale does not name threshold {threshold}: {rationale!r}"
+        assert 'id="rsf-assessment"' in html, (
+            f"{use_case} missing RSF assessment block"
         )
 
 
-# ---------------------------------------------------------------------------
-# Section presence
-# ---------------------------------------------------------------------------
+def test_rsf_block_renders_eight_personas(rendered_reports: dict[str, str]) -> None:
+    """Each RSF block surfaces all 8 personas (the matrix from RSF §3)."""
+    for use_case, html in rendered_reports.items():
+        # Extract the RSF block.
+        start = html.find('id="rsf-assessment"')
+        end = html.find("</section>", start)
+        block = html[start:end]
+        for persona_label in ("VC", "PE/M&amp;A", "CTO/VP Eng", "Eng Mgr", "CISO",
+                              "Procurement", "OSS user", "C-level non-tech"):
+            assert persona_label in block, (
+                f"{use_case} RSF block missing persona {persona_label!r}"
+            )
 
 
 @pytest.mark.parametrize(
     "section_id",
-    ["methodology", "score-decomposition", "gap-analysis", "glossary", "citations"],
+    ["rsf-assessment", "methodology", "glossary", "citations"],
 )
 def test_section_present_in_every_persona(rendered_reports: dict[str, str], section_id: str) -> None:
-    """Each new depth-pass section must render in every persona report."""
+    """RSF-grounded sections must render in every persona report.
+
+    Note: the legacy ``score-decomposition`` and ``gap-analysis`` sections
+    were removed in the RSF cutover (their math used the made-up rubric).
+    """
     for use_case, html in rendered_reports.items():
         assert f'id="{section_id}"' in html, (
             f"{use_case} missing section #{section_id}"
         )
 
 
-def test_methodology_box_names_formula_and_threshold(rendered_reports: dict[str, str]) -> None:
+def test_legacy_score_decomposition_section_is_gone(rendered_reports: dict[str, str]) -> None:
+    """The score-decomposition section was removed in the RSF cutover."""
     for use_case, html in rendered_reports.items():
-        # Extract just the methodology section.
+        assert 'id="score-decomposition"' not in html, (
+            f"{use_case} still renders the legacy score-decomposition section"
+        )
+
+
+def test_legacy_gap_analysis_section_is_gone(rendered_reports: dict[str, str]) -> None:
+    for use_case, html in rendered_reports.items():
+        assert 'id="gap-analysis"' not in html, (
+            f"{use_case} still renders the legacy gap-analysis section"
+        )
+
+
+def test_methodology_box_describes_rsf(rendered_reports: dict[str, str]) -> None:
+    """Methodology section cites RSF aggregation, not legacy multipliers."""
+    for use_case, html in rendered_reports.items():
         start = html.find('id="methodology"')
         end = html.find("</section>", start)
         section = html[start:end]
-        assert "SEVERITY_WEIGHTS" in section, f"{use_case} methodology missing severity-weight reference"
-        assert "use_case_profiles.json" in section, f"{use_case} methodology not citing profile path"
+        assert "RSF" in section or "Repository Scoring Framework" in section
+        # Negative: legacy substrate.
+        assert "SEVERITY_WEIGHTS" not in section
+        assert "use_case_profiles.json" not in section
 
 
-def test_glossary_includes_diligence_bar_for_acquisition(rendered_reports: dict[str, str]) -> None:
-    """The user explicitly asked what 'the diligence bar' is — the glossary defines it."""
-    html = rendered_reports["acquisition_diligence"]
-    start = html.find('id="glossary"')
-    end = html.find("</section>", start)
-    section = html[start:end]
-    assert "diligence bar" in section
+def test_glossary_describes_rsf_terms(rendered_reports: dict[str, str]) -> None:
+    """Glossary leads with RSF terminology (persona-weighted total, dimension score, ?)."""
+    for use_case, html in rendered_reports.items():
+        start = html.find('id="glossary"')
+        end = html.find("</section>", start)
+        section = html[start:end]
+        assert "persona-weighted total" in section, (
+            f"{use_case} glossary missing 'persona-weighted total' entry"
+        )
+        # Negative: legacy.
+        assert "diligence bar" not in section
 
 
 # ---------------------------------------------------------------------------
@@ -203,16 +222,41 @@ def test_at_least_three_citations_per_persona(rendered_reports: dict[str, str]) 
 # ---------------------------------------------------------------------------
 
 
-def test_no_editorial_speculation_terms_leak_into_reports(rendered_reports: dict[str, str]) -> None:
-    """0.11.0 ships only math-polish. Holdback / tranche / etc. wait for 0.14.0+."""
-    forbidden = ("holdback amount", "tranche plan", "valuation discount", "engineer-day rate")
-    # Note: bare 'holdback' / 'tranche' may appear as glossary terms — we exclude those
-    # from 0.11.0 (test_no_editorial_holdback_or_tranche_terms_in_glossary in test_methodology.py
-    # enforces that). Here we guard against the *prose claim* surfacing.
+def test_no_unsourced_numeric_claims_in_reports(rendered_reports: dict[str, str]) -> None:
+    """Reports must not assert specific dollar / engineer-day numbers without
+    a corpus to source them from.
+
+    Persona vocabulary ("valuation discount", "tranche", "escrow") is fine
+    when used qualitatively — that's the persona's frame. What's forbidden
+    is a *number* attached to those terms ("$X holdback", "Y engineer-days
+    per task", "Z% valuation discount") because the corpus that would
+    ground those numbers does not yet exist (that's 0.14.0+ work).
+    """
+    # Match: '$' followed by a digit (any dollar amount) OR 'NN engineer-day(s)'.
+    # These are the patterns that would mean we're inventing numbers.
+    dollar_pattern = re.compile(r"\$[0-9]")
+    engineer_day_pattern = re.compile(r"\d+\s*engineer[- ]days?\s*(per|to)")
+    valuation_pct_pattern = re.compile(r"\d+%\s*(valuation\s*discount|holdback)")
+
     for use_case, html in rendered_reports.items():
-        for token in forbidden:
-            assert token not in html, (
-                f"{use_case} renders editorial token {token!r} — drop until 0.14.0+ corpus exists"
+        # Strip the framework citations and CSS — they may legitimately use
+        # `$` in selectors or example notation.
+        body_idx = html.find("<body>")
+        body = html[body_idx:] if body_idx >= 0 else html
+        # Drop CSS/script/source-code blocks.
+        body = re.sub(r"<style>.*?</style>", "", body, flags=re.DOTALL)
+        body = re.sub(r"<script>.*?</script>", "", body, flags=re.DOTALL)
+
+        for label, pattern in (
+            ("dollar amount", dollar_pattern),
+            ("engineer-day claim", engineer_day_pattern),
+            ("percent discount", valuation_pct_pattern),
+        ):
+            match = pattern.search(body)
+            assert match is None, (
+                f"{use_case} contains an unsourced {label}: {match.group(0)!r}. "
+                "Numeric claims attached to dollars / engineer-days / "
+                "discount-percent require the calibration corpus from 0.14.0+."
             )
 
 
@@ -295,6 +339,66 @@ def test_provenance_shows_classifier_output(rendered_reports: dict[str, str]) ->
             )
 
 
+def _exec_summary_sentences(html: str) -> set[str]:
+    """Extract sentences from a report's exec-summary prose paragraphs.
+
+    The boilerplate guards scope here intentionally — provenance text,
+    RSF assessment numbers, hard-blocker closure items, and the
+    classification line are SHARED across personas (same evidence,
+    different totals). The persona-distinct framing lives in the
+    exec-summary's prose ``<p>`` paragraphs.
+    """
+    opener = '<section class="exec-summary"'
+    idx = html.find(opener)
+    if idx == -1:
+        return set()
+    end = html.find("</section>", idx)
+    if end == -1:
+        return set()
+    section = html[idx:end]
+
+    paragraphs = re.findall(r"<p[^>]*>(.*?)</p>", section, re.DOTALL)
+    sentences: list[str] = []
+    for p in paragraphs:
+        stripped = re.sub(r"<[^>]+>", " ", p)
+        for s in re.split(r"(?<=[.!?])\s+", stripped):
+            s = s.strip()
+            if len(s) > 30:
+                sentences.append(s.lower())
+    return set(sentences)
+
+
+def test_each_persona_has_at_least_two_distinct_sentences_in_exec_summary(
+    rendered_reports: dict[str, str],
+) -> None:
+    """Each persona's exec summary must carry ≥2 sentences unique to it.
+
+    Post-RSF, parts of the exec summary are intentionally shared across
+    personas — they describe the same RSF facts (sub-criteria scored, the
+    lowest-scored anchor, dimensions flagged for `?`). The persona-
+    distinct parts are the framing language ("for thesis credibility…"
+    vs "for post-close ownership cost…" vs "for operational reliability…").
+    The test enforces that distinct framing exists; it doesn't fight the
+    fact that the underlying RSF assessment is the same evidence.
+    """
+    persona_sentences = {
+        use_case: _exec_summary_sentences(html)
+        for use_case, html in rendered_reports.items()
+    }
+    sentence_counts: dict[str, int] = {}
+    for sents in persona_sentences.values():
+        for s in sents:
+            sentence_counts[s] = sentence_counts.get(s, 0) + 1
+
+    for use_case, sents in persona_sentences.items():
+        unique = [s for s in sents if sentence_counts[s] == 1]
+        assert len(unique) >= 2, (
+            f"{use_case} exec summary has only {len(unique)} sentence(s) "
+            "unique to it. Persona framing must produce at least 2 distinct "
+            "sentences (the persona-specific lens / consequence framing)."
+        )
+
+
 def test_no_full_paragraph_appears_identically_across_personas(
     rendered_reports: dict[str, str],
 ) -> None:
@@ -350,13 +454,17 @@ def test_no_full_paragraph_appears_identically_across_personas(
     persona_sentences = {
         use_case: _persona_specific_text(html) for use_case, html in rendered_reports.items()
     }
-    # Any sentence that appears in 3+ personas' exec summaries is boilerplate.
+    # Post-RSF: shared sentences describing the same RSF assessment are
+    # legitimate (same evidence, different totals). What's still
+    # forbidden is *all* persona content overlapping — a persona must
+    # have at least one sentence unique to it.
     sentence_counts: dict[str, int] = {}
     for sents in persona_sentences.values():
         for s in sents:
             sentence_counts[s] = sentence_counts.get(s, 0) + 1
-    overshare = {s: n for s, n in sentence_counts.items() if n >= 3}
-    assert not overshare, (
-        f"sentences appear in ≥3 personas' exec summaries (boilerplate): "
-        f"{list(overshare.items())[:3]}"
-    )
+    for use_case, sents in persona_sentences.items():
+        unique = [s for s in sents if sentence_counts[s] == 1]
+        assert unique, (
+            f"{use_case} exec summary has zero sentences unique to it — "
+            "persona framing is missing entirely"
+        )

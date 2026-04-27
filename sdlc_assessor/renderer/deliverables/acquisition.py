@@ -78,11 +78,8 @@ def build(scored: dict, profile: dict) -> Deliverable:
         recommendation=recommendation_verdict,
         recommendation_rationale=_rationale_sentence(
             recommendation_verdict,
-            score=score,
             critical=len(crit),
             high=len(high),
-            pass_threshold=pass_threshold,
-            distinction_threshold=distinction_threshold,
         ),
         score=score,
         score_band=score_band(score),
@@ -167,36 +164,44 @@ def _subtitle_for_recommendation(verdict: str, score: int) -> str:
 def _rationale_sentence(
     verdict: str,
     *,
-    score: int,
     critical: int,
     high: int,
-    pass_threshold: int = 74,
-    distinction_threshold: int = 88,
 ) -> str:
-    """Cover-page rationale. Names the bar, the gap, and the rule that fired."""
-    gap = pass_threshold - score
+    """Cover-page rationale, framed for the acquisition reader.
+
+    Post-RSF: no longer cites the made-up ``pass_threshold`` / score-vs-bar
+    arithmetic. The RSF assessment block immediately below the cover
+    surfaces the persona-weighted total (PE/M&A row of the §3 matrix);
+    this rationale frames the verdict in acquisition language without
+    reciting the math.
+    """
     if verdict == "proceed":
         return (
-            f"Score {score} ≥ pass threshold {pass_threshold} with no critical blockers; "
-            "see the executive summary and recommendation ladder for conditions."
+            "Asset clears the diligence bar with no critical blockers. "
+            "Integration cost is bounded by the items called out in the RSF "
+            "assessment below; see the recommendation ladder for closing items."
         )
     if verdict == "proceed_with_conditions":
         crit_text = f"{critical} critical blocker{'s' if critical != 1 else ''}" if critical else None
         high_text = f"{high} high-severity issue{'s' if high != 1 else ''}" if high else None
         constraints = ", ".join(t for t in (crit_text, high_text) if t) or "outstanding high-severity issues"
         return (
-            f"Score {score} ≥ pass threshold {pass_threshold} but {constraints} must close before close. "
-            "See the recommendation ladder for the conditions."
+            f"Acquirable subject to closing items: {constraints} must resolve before close, "
+            "either via seller-funded remediation or escrow holdback. "
+            "See the RSF assessment for grounded sub-criterion scores; the "
+            "recommendation ladder for the deal-term path."
         )
     if verdict == "defer":
         return (
-            f"Score {score} falls {gap} points short of the acquisition pass threshold {pass_threshold}. "
-            "Defer until the seller closes the gap (see §3 and the gap-analysis section) and re-runs assessment."
+            "Defer until the seller closes the gap shown in the RSF assessment "
+            "below. Re-run diligence with updated evidence (SBOM, dependency-"
+            "scan reports, signed releases) when seller has remediated."
         )
     return (
-        f"Score {score} is {gap} points below the acquisition pass threshold {pass_threshold}; "
-        f"{critical} critical blocker(s) gate the recommendation per the verdict rule. "
-        "See the executive summary for the decision rule and the recommendation ladder for the path forward."
+        f"Decline at proposed terms: {critical} critical blocker(s) gate the "
+        "acquisition. Integration cost would dominate expected upside; the RSF "
+        "assessment below names the specific issues. Recommendation ladder "
+        "shows the conditions that would unlock a renewed offer."
     )
 
 

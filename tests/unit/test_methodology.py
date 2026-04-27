@@ -1,18 +1,16 @@
-"""Tests for the methodology + glossary registry (0.11.0 depth pass).
+"""Tests for the methodology + glossary registry (post-RSF cutover).
 
-Every glossary entry must cite a real code path. Every methodology
-claim must reference a source. The 0.11.0 cut explicitly excludes
-editorial / unsourced definitions.
+The methodology box and glossary describe the RSF v1.0 framework, not
+the legacy made-up rubric. Every entry / claim cites
+``docs/frameworks/rsf_v1.0.md`` as the source of truth.
 """
 
 from __future__ import annotations
 
 import pathlib
-import re
-
-import pytest
 
 from sdlc_assessor.renderer.deliverables._methodology import (
+    _GLOSSARY_REGISTRY,
     all_glossary_terms,
     glossary_for,
     methodology_for,
@@ -30,141 +28,134 @@ def _scored_for(use_case: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Methodology
+# Methodology — describes the RSF framework
 # ---------------------------------------------------------------------------
 
 
-def test_methodology_formula_names_real_constants() -> None:
+def test_methodology_formula_names_rsf_aggregation() -> None:
+    """Formula must describe RSF §4 aggregation, not the legacy multipliers."""
     m = methodology_for(_scored_for("acquisition_diligence"), "acquisition_diligence")
     formula = m.score_formula
-    for token in (
-        "SEVERITY_WEIGHTS",
-        "CONFIDENCE_MULTIPLIERS",
-        "maturity_severity_multiplier",
-        "BASE_WEIGHTS",
-    ):
-        assert token in formula
+    # Per RSF §4: D_i = mean of sub-criteria; T = Σ D_i × w_i; T_% = T/500 × 100.
+    assert "D_i" in formula
+    assert "w_i" in formula
+    assert "T_%" in formula or "T / 500" in formula
+    # RSF special values per §1.
+    assert "?" in formula
+    assert "N/A" in formula
 
 
-def test_methodology_threshold_explanation_names_use_case() -> None:
+def test_methodology_threshold_explanation_drops_legacy_rubric() -> None:
+    """No legacy made-up `pass_threshold` / `distinction_threshold` language."""
+    for use_case in ("vc_diligence", "acquisition_diligence", "engineering_triage"):
+        m = methodology_for(_scored_for(use_case), use_case)
+        # The legacy "pass_threshold = 72" / "use_case_profiles.json" wording
+        # is gone; the RSF framing is in.
+        assert "RSF" in m.threshold_explanation or "Repository Scoring Framework" in m.threshold_explanation
+        # Negative checks: the legacy phrases must not appear.
+        assert "internal rubric" not in m.threshold_explanation
+        assert "use_case_profiles.json" not in m.threshold_explanation
+
+
+def test_methodology_explanation_lists_rsf_published_anchors() -> None:
+    """The published-standard list from RSF §11 must be cited."""
     m = methodology_for(_scored_for("vc_diligence"), "vc_diligence")
-    assert "vc_diligence" in m.threshold_explanation
-    assert "use_case_profiles.json" in m.threshold_explanation
+    body = m.threshold_explanation
+    # A non-trivial sample of the RSF §11 frameworks.
+    for anchor in ("OpenSSF Scorecard", "OWASP", "NIST SSDF", "SLSA", "DORA"):
+        assert anchor in body, f"methodology threshold-explanation missing {anchor}"
 
 
-def test_methodology_threshold_explanation_discloses_internal_calibration() -> None:
-    """The reader must know the threshold is internal-rubric, not real-outcome."""
-    m = methodology_for(_scored_for("acquisition_diligence"), "acquisition_diligence")
-    assert "internal rubric" in m.threshold_explanation
-    assert "0.14.0" in m.threshold_explanation  # points to the corpus phase
-
-
-def test_methodology_multiplier_explanation_lists_three_multipliers() -> None:
+def test_methodology_multiplier_explanation_describes_rsf_aggregation() -> None:
+    """No legacy three-multipliers language; instead, RSF §4 aggregation."""
     m = methodology_for(_scored_for("engineering_triage"), "engineering_triage")
-    assert "SEVERITY_WEIGHTS" in m.multiplier_explanation
-    assert "CONFIDENCE_MULTIPLIERS" in m.multiplier_explanation
-    assert "severity_multiplier" in m.multiplier_explanation
+    body = m.multiplier_explanation
+    assert "RSF" in body
+    # Negative checks.
+    assert "SEVERITY_WEIGHTS" not in body
+    assert "CONFIDENCE_MULTIPLIERS" not in body
+    assert "severity_multiplier" not in body
 
 
-def test_methodology_verdict_rule_table_has_four_rules_and_sources() -> None:
+def test_methodology_verdict_rule_table_describes_confidence_flagging() -> None:
+    """Post-RSF the rule table is about confidence + N/A handling, not a
+    pass/fail ladder. RSF doesn't define a single pass threshold."""
     m = methodology_for(_scored_for("acquisition_diligence"), "acquisition_diligence")
-    verdicts = {r["verdict"] for r in m.verdict_rule_table}
-    assert verdicts == {"pass_with_distinction", "pass", "conditional_pass", "fail"}
-    for rule in m.verdict_rule_table:
-        assert "scorer/engine.py" in rule["source"]
+    sources = " ".join(rule["source"] for rule in m.verdict_rule_table)
+    assert "RSF" in sources
+    # No legacy verdict ladder.
+    bodies = " ".join(rule["verdict"] for rule in m.verdict_rule_table)
+    assert "pass_with_distinction" not in bodies
+    assert "conditional_pass" not in bodies
 
 
-def test_methodology_calibration_band_discloses_internal_corpus() -> None:
+def test_methodology_calibration_band_references_rsf_calibration_set() -> None:
+    """RSF §5 prescribes a 3-point calibration set; methodology cites it."""
     m = methodology_for(_scored_for("acquisition_diligence"), "acquisition_diligence")
     assert m.calibration_band is not None
-    assert "internal fixture corpus" in m.calibration_band
-    assert "not real-world outcomes" in m.calibration_band
+    body = m.calibration_band.lower()
+    assert "rsf" in body or "calibration" in body
+    # Negative: no legacy "internal rubric, n=26 fixtures" claim.
+    assert "n=26" not in body
+    assert "n≈26" not in body
 
 
 # ---------------------------------------------------------------------------
-# Glossary
+# Glossary — RSF terms only; no legacy entries
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "use_case",
-    [
+def test_legacy_glossary_terms_are_gone() -> None:
+    """diligence_bar / pass_threshold / distinction_threshold etc. must be removed."""
+    forbidden = {
+        "diligence_bar",
+        "pass_threshold",
+        "distinction_threshold",
+        "severity_weight",
+        "confidence_multiplier",
+        "maturity_factor",
+        "production_flat_penalty",
+        "score_confidence",
+    }
+    actual = set(all_glossary_terms())
+    leaked = forbidden & actual
+    assert not leaked, f"legacy glossary entries still present: {sorted(leaked)}"
+
+
+def test_rsf_glossary_terms_present() -> None:
+    """The glossary leads with the RSF terms the report actually uses."""
+    expected = {"rsf_persona_total", "rsf_dimension_score", "rsf_unverified"}
+    actual = set(all_glossary_terms())
+    missing = expected - actual
+    assert not missing, f"missing RSF glossary entries: {sorted(missing)}"
+
+
+def test_glossary_entries_cite_rsf_doc_or_real_paths() -> None:
+    """Every source must be either ``docs/frameworks/rsf_v1.0.md`` or a real path."""
+    for term, entry in _GLOSSARY_REGISTRY.items():
+        for src in entry.sources:
+            # Strip optional `:line` and parenthetical sections like `(§3, §4)`.
+            path_only = src.split(":", 1)[0].split(" (", 1)[0]
+            full_path = REPO_ROOT / path_only
+            assert full_path.exists(), (
+                f"glossary entry {term!r} cites missing path {src!r}"
+            )
+
+
+def test_glossary_for_each_persona_includes_the_rsf_basics() -> None:
+    for use_case in (
         "acquisition_diligence",
         "vc_diligence",
         "engineering_triage",
         "remediation_agent",
-    ],
-)
-def test_glossary_present_for_persona(use_case: str) -> None:
-    g = glossary_for(use_case)
-    assert len(g) >= 4
-    # Every entry has a non-empty short_def AND at least one source.
-    for entry in g:
-        assert entry.term
-        assert entry.short_def
-        assert entry.sources
-
-
-def test_glossary_entries_cite_real_paths() -> None:
-    """Every source path in every glossary entry resolves to a real file in this repo."""
-    for term_key in all_glossary_terms():
-        from sdlc_assessor.renderer.deliverables._methodology import _GLOSSARY_REGISTRY
-
-        entry = _GLOSSARY_REGISTRY[term_key]
-        for src in entry.sources:
-            # Strip line numbers (e.g. "scorer/engine.py:24") for existence check.
-            path_only = src.split(":", 1)[0]
-            full_path = REPO_ROOT / path_only
-            assert full_path.exists(), f"glossary entry {term_key!r} cites missing path {src!r}"
-
-
-def test_glossary_line_citations_resolve_to_actual_lines() -> None:
-    """Glossary entries that cite a specific line number must be in-bounds."""
-    from sdlc_assessor.renderer.deliverables._methodology import _GLOSSARY_REGISTRY
-
-    for term_key, entry in _GLOSSARY_REGISTRY.items():
-        for src in entry.sources:
-            if ":" not in src:
-                continue
-            path_str, line_str = src.rsplit(":", 1)
-            if not line_str.isdigit():
-                continue
-            full_path = REPO_ROOT / path_str
-            line_count = sum(1 for _ in full_path.open())
-            assert int(line_str) <= line_count, (
-                f"glossary entry {term_key!r} cites {src!r} but file has only {line_count} lines"
-            )
-
-
-def test_diligence_bar_in_acquisition_glossary() -> None:
-    """The user explicitly asked what 'the diligence bar' is — that term must ship."""
-    g = glossary_for("acquisition_diligence")
-    assert any(e.term == "diligence bar" for e in g)
-
-
-def test_diligence_bar_definition_discloses_internal_rubric() -> None:
-    """The definition must not imply industry-standard authority."""
-    g = glossary_for("acquisition_diligence")
-    bar = next(e for e in g if e.term == "diligence bar")
-    assert "internal rubric" in bar.long_def
-    assert "industry-standard" in bar.long_def or "not as industry" in bar.long_def
-
-
-def test_glossary_includes_the_full_multiplier_chain() -> None:
-    g = glossary_for("acquisition_diligence")
-    terms = {e.term for e in g}
-    # The reader must be able to look up every input that drives a deduction.
-    for required in ("severity weight", "confidence multiplier", "maturity factor"):
-        assert required in terms, f"missing glossary term: {required}"
-
-
-def test_no_editorial_holdback_or_tranche_terms_in_glossary() -> None:
-    """The 0.11.0 cut deliberately excludes economic terms that rest on speculation."""
-    for use_case in ["acquisition_diligence", "vc_diligence", "engineering_triage", "remediation_agent"]:
-        g = glossary_for(use_case)
-        terms = {e.term for e in g}
-        for forbidden in ("holdback", "tranche", "escrow", "valuation discount"):
-            assert forbidden not in terms, (
-                f"glossary for {use_case} contains editorial term {forbidden!r} — "
-                "drop until 0.14.0 corpus exists"
+    ):
+        terms = {e.term for e in glossary_for(use_case)}
+        # Every persona's glossary leads with the RSF terms.
+        for required in (
+            "persona-weighted total (T_%)",
+            "dimension score (D_i)",
+            "unverified (`?`)",
+        ):
+            assert required in terms, (
+                f"{use_case} glossary missing RSF term: {required!r}"
             )

@@ -295,9 +295,18 @@ section.kind-prose, section.kind-facts { margin-bottom: 1rem; }
 
 /* 0.11.0 depth pass: provenance banner — pinned identity at the very top */
 .provenance {
-  background: var(--bg-alt); border-bottom: 1px solid var(--rule-strong);
+  /* Solid opaque background — body text must NOT bleed through when scrolling. */
+  background-color: #f7f8fa;
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--rule-strong);
   padding: 1rem 1.6rem; font-family: var(--sans); font-size: 0.92rem;
-  position: sticky; top: 0; z-index: 100;
+  position: sticky; top: 0; z-index: 1000;
+  /* Cast a subtle shadow so the banner edge is visible against scrolling content. */
+  box-shadow: 0 2px 8px rgba(20, 22, 28, 0.08);
+  /* Backdrop blur as belt-and-suspenders; even if a browser ignores
+     background-color the body text won't be legible through the blur. */
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .prov-row { max-width: 980px; margin: 0 auto; }
 .prov-identity {
@@ -328,11 +337,15 @@ section.kind-prose, section.kind-facts { margin-bottom: 1rem; }
 .prov-grid dd { margin: 0; font-weight: 600; color: var(--ink); font-size: 0.88rem; }
 .prov-grid code { font-family: var(--mono); font-size: 0.84em; }
 @media print {
-  .provenance { position: static; page-break-after: avoid; border-bottom: 1px solid #000; }
+  .provenance { position: static; page-break-after: avoid; border-bottom: 1px solid #000; box-shadow: none; backdrop-filter: none; }
 }
 @media (max-width: 720px) {
   .provenance { position: static; }
   .prov-identity { flex-direction: column; gap: 0.5rem; }
+}
+/* Compact mode triggered by tiny viewports — collapses the metadata grid. */
+@media (max-height: 520px) {
+  .provenance .prov-meta { display: none; }
 }
 
 /* 0.11.0 depth pass: exec summary, methodology, decomposition, gap, glossary, citations */
@@ -347,11 +360,11 @@ sup.cite { font-family: var(--sans); font-size: 0.7em; vertical-align: super; li
 sup.cite a { color: var(--accent); text-decoration: none; padding: 0 0.1em; }
 sup.cite a:hover { text-decoration: underline; }
 
-.methodology, .score-decomposition, .gap-analysis, .glossary, .citations {
+.methodology, .glossary, .citations {
   background: var(--surface); border-radius: 10px; box-shadow: var(--shadow);
   padding: 1.4rem 1.6rem; margin: 0.6rem 0 1.6rem;
 }
-.methodology h2, .score-decomposition h2, .gap-analysis h2, .glossary h2, .citations h2 {
+.methodology h2, .glossary h2, .citations h2 {
   border-top: none; margin-top: 0; padding-top: 0;
 }
 .methodology h4 { margin: 1rem 0 0.4rem; color: var(--accent); font-size: 0.9rem; text-transform: none; letter-spacing: 0; }
@@ -582,6 +595,15 @@ def _render_section(section, *, narrator: str = "deterministic") -> str:
 
 
 def _render_prose(section) -> str:
+    """Render a `kind="prose"` section's body.
+
+    Note: the outer ``_render_section`` already emits ``section.summary``
+    as a ``<p class="summary">``. We do NOT fall back to
+    ``section.narrative_block.summary`` here even when ``data.paragraphs``
+    is empty — that fallback double-prints the same text whenever a
+    builder constructs a Section with both ``summary`` and
+    ``narrative_block`` (the common pattern for narrative-block sections).
+    """
     paragraphs = section.data.get("paragraphs") or []
     out: list[str] = []
     for para in paragraphs:
@@ -590,8 +612,6 @@ def _render_prose(section) -> str:
             out.append(f'<p><code>{_esc(para)}</code></p>')
         else:
             out.append(f"<p>{_esc(para)}</p>")
-    if not out and section.narrative_block:
-        out.append(f"<p>{_esc(section.narrative_block.summary)}</p>")
     return "\n".join(out)
 
 
@@ -1364,20 +1384,24 @@ def render_deliverable_html(
     :mod:`sdlc_assessor.narrator` — this renderer just consumes whatever
     text is already attached to the deliverable.
 
-    Document order (0.11.0):
+    Document order (0.11.0, post-RSF):
 
-    1. Provenance banner (NEW — names the subject: project name, URL, commit, scanned-at, classifier output)
-    2. Cover (existing)
-    3. Executive summary (NEW — prose with inline footnote markers)
-    4. Methodology (NEW — formula + threshold + multipliers + verdict rules)
-    5. Score decomposition (NEW — per-category arithmetic)
-    6. Gap analysis (NEW — gap-to-pass + closing phases as projections)
-    7. Body sections (existing — radar, risk matrix, persona narrative blocks)
-    8. Recommendation block (existing)
-    9. Glossary (NEW)
-    10. Citations (NEW)
-    11. Engineering appendix (existing — finding listings)
-    12. Footer
+    1. Provenance banner — names the subject (project, URL, commit, classifier).
+    2. Cover — recommendation pill + headline metric (gauge).
+    3. RSF v1.0 assessment — anchored scoring (per-dim, per-persona, top-5).
+    4. Executive summary — RSF-grounded prose paragraphs.
+    5. Body sections — persona-distinct charts + narrative blocks.
+    6. Recommendation block — persona-specific decision ladder.
+    7. Methodology — RSF formula + framework citations.
+    8. Glossary — terms used in the report.
+    9. Citations — footnote list resolving inline [N] markers.
+    10. Engineering appendix — full finding listing.
+    11. Footer.
+
+    The legacy ``score_decomposition`` and ``gap_analysis`` sections were
+    removed in the RSF cutover. Their math used the made-up 0–100 scoring
+    rubric that RSF supersedes; rendering them alongside the RSF block
+    contradicted the RSF disclaimer two screens up.
     """
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     provenance_html = _render_provenance_header(deliverable)
@@ -1385,8 +1409,6 @@ def render_deliverable_html(
     rsf_html = _render_rsf_assessment(scored, deliverable)
     exec_summary_html = _render_executive_summary(deliverable)
     methodology_html = _render_methodology(deliverable)
-    decomp_html = _render_score_decomposition(deliverable)
-    gap_html = _render_gap_analysis(deliverable)
     sections_html = "\n".join(
         _render_section(section, narrator=narrator) for section in deliverable.sections
     )
@@ -1411,11 +1433,9 @@ def render_deliverable_html(
     {cover_html}
     {rsf_html}
     {exec_summary_html}
-    {methodology_html}
-    {decomp_html}
-    {gap_html}
     {sections_html}
     {recommendation_html}
+    {methodology_html}
     {glossary_html}
     {citations_html}
     {appendix_html}

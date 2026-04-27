@@ -25,64 +25,83 @@ from sdlc_assessor.renderer.deliverables.base import (
 
 
 _SCORE_FORMULA = (
-    "overall = clamp(0, 100, Σ category.earned − Σ flat_penalties)\n"
-    "category.earned = clamp(0, normalized_max, normalized_max − Σ deductions)\n"
-    "deduction[finding] = SEVERITY_WEIGHTS[sev]\n"
-    "                    × CONFIDENCE_MULTIPLIERS[conf]\n"
-    "                    × maturity_severity_multiplier\n"
-    "                    × (magnitude / 10)\n"
-    "normalized_max[cat] = 100 × (BASE_WEIGHTS[cat] × multiplier[cat])\n"
-    "                    / Σ_applicable (BASE_WEIGHTS[c] × multiplier[c])"
+    "RSF v1.0 §4 — Aggregation\n"
+    "\n"
+    "Per-dimension score:\n"
+    "  D_i = (Σ_j s_ij) / (n_i × 5) × 5\n"
+    "  where s_ij is the score (0..5) for sub-criterion j of dimension i,\n"
+    "  and n_i is the count of sub-criteria scored (excluding N/A).\n"
+    "\n"
+    "Persona-weighted total:\n"
+    "  T = Σ_i D_i × w_i\n"
+    "  where w_i is the persona's weight for dimension i (RSF §3 matrix,\n"
+    "  weights sum to 100 per persona). T is on a 0..500 scale.\n"
+    "\n"
+    "Normalized presentation:\n"
+    "  T_% = T / 500 × 100\n"
+    "\n"
+    "Special values (RSF §1):\n"
+    "  ? = evidence not collected — treated as 0 in the math but flagged.\n"
+    "  N/A = criterion does not apply — excluded from the dimension's\n"
+    "        denominator; persona weights for N/A dimensions are\n"
+    "        proportionally redistributed across remaining dimensions."
 )
 
 
 def _verdict_rule_table() -> list[dict]:
-    """Mirrors the verdict ladder in scorer.engine.score_evidence.
+    """RSF v1.0 does not define a single verdict ladder; consumers compare
+    persona-weighted totals against peer benchmarks.
 
-    Source: sdlc_assessor/scorer/engine.py:244-251.
+    The table below names the RSF *confidence* rules instead — these ARE
+    framework-defined and gate report disclosures.
     """
     return [
         {
-            "condition": "score ≥ distinction_threshold AND no blockers (any severity)",
-            "verdict": "pass_with_distinction",
-            "source": "scorer/engine.py:244",
+            "condition": "Any sub-criterion in a dimension is `?` (unverified)",
+            "verdict": "dimension flagged for confidence",
+            "source": "RSF §4 — confidence flag",
         },
         {
-            "condition": "score ≥ pass_threshold AND no critical blockers",
-            "verdict": "pass",
-            "source": "scorer/engine.py:246",
+            "condition": ">25% of a persona's weight maps to flagged dimensions",
+            "verdict": "report header carries a 'limited confidence' warning",
+            "source": "RSF §4 — limited-confidence warning",
         },
         {
-            "condition": "(score ≥ pass_threshold AND has critical) OR (score < pass_threshold AND has any blocker)",
-            "verdict": "conditional_pass",
-            "source": "scorer/engine.py:248",
+            "condition": "All sub-criteria in a dimension are N/A",
+            "verdict": "dimension excluded; persona weights redistributed across remaining dims",
+            "source": "RSF §3 + §4 — N/A redistribution",
         },
         {
-            "condition": "otherwise",
-            "verdict": "fail",
-            "source": "scorer/engine.py:250",
+            "condition": (
+                "Inter-rater disagreement >1 point per sub-criterion (multi-assessor)"
+            ),
+            "verdict": "evidence review triggered; lower score recorded if persists",
+            "source": "RSF §5 — inter-rater protocol",
         },
     ]
 
 
 def _calibration_band_for(scored: dict) -> str | None:
-    """Match the asset's (maturity, archetype) against docs/calibration_targets.md.
+    """Surface RSF §5's calibration-set guidance.
 
-    The targets file is the only calibration anchor in the repo. Be
-    explicit when no band is registered for the combination — we do
-    not invent one.
+    RSF §5 prescribes scoring against three reference points before
+    assessing a target: a widely-used OSS project with published
+    Scorecard/SLSA/SAMM evidence (expected RSF total 4.0+), a typical
+    mid-stage SaaS company repo (2.5–3.5), and a neglected internal
+    repo with no CI/CD discipline (0.5–1.5). This assessor has not yet
+    integrated those reference scores; flag the gap explicitly.
     """
     cls = scored.get("classification") or {}
     maturity = cls.get("maturity_profile", "unknown")
     archetype = cls.get("repo_archetype", "unknown")
 
-    # The fixture-derived bands in docs/calibration_targets.md cover a
-    # narrow set; we don't pretend coverage we don't have.
     return (
-        f"calibration_band: archetype={archetype}, maturity={maturity}; "
-        "see docs/calibration_targets.md. The targets file calibrates against "
-        "internal fixture corpus (n≈26), not real-world outcomes — treat as "
-        "an internal rubric, not a population statistic."
+        f"Asset profile: archetype={archetype}, maturity={maturity}. "
+        "RSF §5 calibration-set scoring (vs. a published-evidence OSS project, "
+        "a typical mid-stage SaaS, and a neglected internal repo) is not yet "
+        "integrated into this assessor's pipeline; the per-persona total below "
+        "is an absolute reading against the framework's anchors, not a relative "
+        "reading against a peer corpus."
     )
 
 
@@ -96,21 +115,25 @@ def methodology_for(scored: dict, use_case: str) -> MethodologyNote:
     return MethodologyNote(
         score_formula=_SCORE_FORMULA,
         threshold_explanation=(
-            f"The pass and distinction thresholds are persona-specific, "
-            f"defined in sdlc_assessor/profiles/data/use_case_profiles.json under "
-            f"'{use_case}'. The threshold values are an internal rubric calibrated "
-            f"against the fixture corpus in tests/fixtures/. They are NOT calibrated "
-            f"against real-world M&A / VC / engineering outcomes; that calibration "
-            f"corpus is scheduled for 0.14.0."
+            "The Repository Scoring Framework v1.0 does not define a single "
+            "fixed pass threshold. Each persona has a weight matrix (RSF §3) "
+            "that produces a 0–100% total from the 8 dimension scores. "
+            "Consumers compare a target's total against peer benchmarks "
+            "(RSF §5 calibration set) rather than against a single bar. "
+            "Per-criterion level anchors (0..5) come from the published "
+            "industry standards in §11's framework-to-criterion mapping: "
+            "OpenSSF Scorecard, OWASP ASVS, OWASP Top 10, NIST SSDF, SLSA, "
+            "CycloneDX/SPDX, Sigstore, DORA, ISO/IEC 27001, AICPA SOC 2, "
+            "CSA CAIQ. See docs/frameworks/rsf_v1.0.md for the full spec."
         ),
         multiplier_explanation=(
-            "Three multipliers compose for each finding's deduction: "
-            "(1) SEVERITY_WEIGHTS in scorer/engine.py:24 — info=0, low=2, medium=5, high=10, critical=20; "
-            "(2) CONFIDENCE_MULTIPLIERS in scorer/engine.py:26 — high=1.0, medium=0.9, low=0.7; "
-            "(3) maturity severity_multiplier from profiles/data/maturity_profiles.json — "
-            "production=1.2, prototype=0.95, research=0.9. The persona's "
-            "category_multipliers (from use_case_profiles.json) further weight each "
-            "category's normalized contribution."
+            "RSF §4 has no severity / confidence / maturity multipliers. "
+            "Aggregation is the unweighted mean of sub-criterion scores per "
+            "dimension (Σ_j s_ij / n_i, on the 0..5 scale), then a persona-"
+            "weighted sum across dimensions (Σ_i D_i × w_i, on the 0..500 "
+            "scale, normalized to 0..100%). The only inputs are: (a) the "
+            "0..5 score against each sub-criterion's level anchors, (b) the "
+            "persona's weight row from §3."
         ),
         verdict_rule_table=_verdict_rule_table(),
         calibration_band=_calibration_band_for(scored),
@@ -126,108 +149,50 @@ def methodology_for(scored: dict, use_case: str) -> MethodologyNote:
 # ---------------------------------------------------------------------------
 
 _GLOSSARY_REGISTRY: dict[str, GlossaryEntry] = {
-    "diligence_bar": GlossaryEntry(
-        term="diligence bar",
-        short_def="Persona-specific pass threshold below which the recommendation defaults to defer or decline.",
+    "rsf_persona_total": GlossaryEntry(
+        term="persona-weighted total (T_%)",
+        short_def="The 0–100% weighted sum of dimension scores using a persona's RSF §3 weight row.",
         long_def=(
-            "Each persona profile sets its own pass_threshold. Acquisition diligence "
-            "uses 74; VC diligence uses 72; engineering triage and remediation agent "
-            "use 70. These values are an internal rubric calibrated against the "
-            "fixture corpus, not against real-world outcomes — treat them as "
-            "defensible thresholds within this tool, not as industry-standard bars."
+            "Per RSF §4: T = Σ_i D_i · w_i where D_i is the dimension's mean "
+            "(0..5) and w_i is the persona's weight for that dimension (sums "
+            "to 100 across all 8 dimensions). T_% = T / 500 × 100. RSF does "
+            "not specify a single 'pass threshold'; consumers compare T_% "
+            "against peer benchmarks per RSF §5 (calibration set)."
         ),
-        sources=[
-            "sdlc_assessor/profiles/data/use_case_profiles.json",
-            "docs/calibration_targets.md",
-        ],
+        sources=["docs/frameworks/rsf_v1.0.md (§3, §4)"],
     ),
-    "pass_threshold": GlossaryEntry(
-        term="pass threshold",
-        short_def="The score at or above which a persona's verdict is 'pass' (provided no critical blockers).",
+    "rsf_dimension_score": GlossaryEntry(
+        term="dimension score (D_i)",
+        short_def="The mean of a dimension's sub-criterion scores, on the 0..5 scale.",
         long_def=(
-            "Defined per use_case in profiles/data/use_case_profiles.json. The "
-            "scorer compares overall_score against pass_threshold and "
-            "distinction_threshold to assign one of four verdicts. See "
-            "verdict-rule table in the methodology section."
+            "Per RSF §4: D_i = (Σ_j s_ij) / (n_i · 5) × 5, which simplifies "
+            "to the unweighted mean of the dimension's scored sub-criteria "
+            "(excluding N/A). Each sub-criterion's 0..5 score comes from the "
+            "level anchors in RSF §2 — see the framework-to-criterion mapping "
+            "in §11 for the published-standard reference per criterion."
         ),
-        sources=[
-            "sdlc_assessor/profiles/data/use_case_profiles.json",
-            "sdlc_assessor/scorer/engine.py:237",
-        ],
+        sources=["docs/frameworks/rsf_v1.0.md (§2, §4)"],
     ),
-    "distinction_threshold": GlossaryEntry(
-        term="distinction threshold",
-        short_def="The score at or above which the verdict is 'pass_with_distinction', provided zero blockers.",
+    "rsf_unverified": GlossaryEntry(
+        term="unverified (`?`)",
+        short_def="Sub-criterion the assessor could not collect evidence for.",
         long_def=(
-            "The strictest verdict band. Requires both a high score and no hard "
-            "blockers of any severity (not just no critical ones). This is the "
-            "'no notes' tier — anything less and the verdict drops to plain pass."
+            "Per RSF §1: `?` is treated as 0 in the math but flagged "
+            "separately so the report distinguishes 'absent' (a real 0 "
+            "score) from 'unverified' (no evidence collected). Any "
+            "dimension with ≥1 `?` carries a confidence flag; if >25% of a "
+            "persona's weight maps to flagged dimensions, the report header "
+            "carries a 'limited confidence' warning."
         ),
-        sources=[
-            "sdlc_assessor/profiles/data/use_case_profiles.json",
-            "sdlc_assessor/scorer/engine.py:238",
-        ],
+        sources=["docs/frameworks/rsf_v1.0.md (§1, §4)"],
     ),
-    "severity_weight": GlossaryEntry(
-        term="severity weight",
-        short_def="The point cost a finding contributes to deduction before confidence and maturity multipliers.",
-        long_def=(
-            "Defined in scorer/engine.py: info=0, low=2, medium=5, high=10, "
-            "critical=20. Each finding's deduction is severity_weight × "
-            "confidence_multiplier × maturity_factor × (magnitude / 10). The "
-            "scale was raised from {1, 2, 4, 6} in the SDLC-026 calibration."
-        ),
-        sources=["sdlc_assessor/scorer/engine.py:24"],
-    ),
-    "confidence_multiplier": GlossaryEntry(
-        term="confidence multiplier",
-        short_def="Damping factor applied to a finding's deduction based on detector confidence.",
-        long_def=(
-            "high=1.0, medium=0.9, low=0.7. Defined in scorer/engine.py:26. "
-            "Detectors emit confidence labels per finding (high when the "
-            "detector is sure, low when the signal is heuristic / proxied). "
-            "The damping reduces the deduction for low-confidence findings so "
-            "noisy detectors don't dominate the score."
-        ),
-        sources=["sdlc_assessor/scorer/engine.py:26"],
-    ),
-    "maturity_factor": GlossaryEntry(
-        term="maturity factor",
-        short_def="Severity multiplier set per maturity profile.",
-        long_def=(
-            "production=1.2 (issues are 20% more costly than baseline), "
-            "prototype=0.95, research=0.9. Same finding scored against a "
-            "production codebase deducts more than against a prototype. "
-            "Defined in profiles/data/maturity_profiles.json."
-        ),
-        sources=["sdlc_assessor/profiles/data/maturity_profiles.json"],
-    ),
-    "production_flat_penalty": GlossaryEntry(
-        term="production flat penalty",
-        short_def="Score deduction triggered by category-independent missing essentials in production-maturity repos.",
-        long_def=(
-            "Three penalties fire only when maturity is 'production' AND the "
-            "corresponding finding/condition is present: missing_ci=10, "
-            "missing_readme=8, missing_tests=15 (when inventory.test_files=0). "
-            "Applied as a final overall-score adjustment after per-category "
-            "scoring, so the deduction is visible alongside category scores "
-            "rather than re-bucketed into one category."
-        ),
-        sources=["sdlc_assessor/scorer/engine.py:30"],
-    ),
-    "score_confidence": GlossaryEntry(
-        term="score confidence",
-        short_def="How much weight to put on the score itself, computed from classifier confidence + finding density.",
-        long_def=(
-            "high if classification_confidence ≥ 0.7 AND proxy_ratio ≤ 0.3 AND "
-            "evidence_density ≥ 0.1; low if classification_confidence ≤ 0.3 OR "
-            "proxy_ratio ≥ 0.7; medium otherwise. proxy_ratio is the fraction "
-            "of findings with confidence='medium'; evidence_density is "
-            "findings / source_files. Defined in "
-            "scorer/engine.py:_compute_score_confidence."
-        ),
-        sources=["sdlc_assessor/scorer/engine.py:295"],
-    ),
+    # Legacy glossary entries (severity_weight, confidence_multiplier,
+    # maturity_factor, production_flat_penalty, score_confidence) were
+    # removed in the RSF cutover. They described the made-up multiplier
+    # chain in the legacy scoring engine; under RSF, aggregation is the
+    # unweighted mean of sub-criterion scores per dimension and the
+    # persona-weighted sum across dimensions (RSF §4) — no multipliers,
+    # no flat penalties.
     "expected_score_delta": GlossaryEntry(
         term="expected score delta",
         short_def="A remediation task's projected point gain when closed, computed by the planner.",
@@ -276,44 +241,35 @@ _GLOSSARY_REGISTRY: dict[str, GlossaryEntry] = {
 
 
 _PERSONA_GLOSSARY_KEYS: dict[str, list[str]] = {
+    # Post-RSF: every persona's glossary leads with the RSF terms
+    # (persona-weighted total, dimension score, unverified marker) since
+    # those are what the report actually surfaces. Persona-specific
+    # additions follow.
     "acquisition_diligence": [
-        "diligence_bar",
-        "pass_threshold",
-        "distinction_threshold",
-        "severity_weight",
-        "confidence_multiplier",
-        "maturity_factor",
-        "production_flat_penalty",
-        "score_confidence",
+        "rsf_persona_total",
+        "rsf_dimension_score",
+        "rsf_unverified",
         "applicability",
         "hard_blocker",
     ],
     "vc_diligence": [
-        "diligence_bar",
-        "pass_threshold",
-        "distinction_threshold",
-        "severity_weight",
-        "confidence_multiplier",
-        "score_confidence",
+        "rsf_persona_total",
+        "rsf_dimension_score",
+        "rsf_unverified",
         "hard_blocker",
     ],
     "engineering_triage": [
-        "pass_threshold",
-        "distinction_threshold",
-        "severity_weight",
-        "confidence_multiplier",
-        "maturity_factor",
-        "production_flat_penalty",
-        "score_confidence",
+        "rsf_persona_total",
+        "rsf_dimension_score",
+        "rsf_unverified",
         "applicability",
         "expected_score_delta",
         "hard_blocker",
     ],
     "remediation_agent": [
-        "pass_threshold",
-        "severity_weight",
-        "confidence_multiplier",
-        "maturity_factor",
+        "rsf_persona_total",
+        "rsf_dimension_score",
+        "rsf_unverified",
         "expected_score_delta",
         "hard_blocker",
     ],
