@@ -177,10 +177,15 @@ def test_load_signed_pack_rejects_tampered_signature(tmp_path: Path) -> None:
         secret_hex=secret,
         key_id="k",
     )
-    # Flip one hex char of the signature.
+    # Flip one hex char of the signature. Pick a replacement that differs
+    # from the original first char — otherwise on the ~1/16 of runs where
+    # the HMAC's leading hex char happens to be the same, we mutate to a
+    # no-op and the test silently passes / flakes.
     sig_path = pack_dir / "signature.json"
     payload = json.loads(sig_path.read_text(encoding="utf-8"))
-    payload["signature"] = "0" + payload["signature"][1:]
+    original_sig = payload["signature"]
+    new_first = "1" if original_sig[0] != "1" else "2"
+    payload["signature"] = new_first + original_sig[1:]
     sig_path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(PackVerificationError, match="Signature mismatch"):
         load_signed_pack(pack_dir, trust={"k": secret})
