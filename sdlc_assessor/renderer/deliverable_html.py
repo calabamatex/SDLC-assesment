@@ -266,6 +266,74 @@ section.kind-prose, section.kind-facts { margin-bottom: 1rem; }
 .both-grid .col { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); padding: 1rem 1.1rem; }
 .both-grid .col h4 { margin-top: 0; color: var(--accent); }
 
+/* Persona-contextual translation cards (top-5 RSF findings, persona-framed) */
+.persona-translation {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0 2rem;
+}
+.pt-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border-left: 4px solid var(--accent);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.3rem;
+}
+.pt-card-head {
+  display: flex; align-items: baseline; gap: 0.7rem;
+  margin-bottom: 0.5rem; flex-wrap: wrap;
+}
+.pt-score {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.pt-score.score-zero { background: var(--critical-bg); color: var(--critical-fg); }
+.pt-score.score-low  { background: var(--high-bg);     color: var(--high-fg); }
+.pt-score.score-mid  { background: var(--medium-bg);   color: var(--medium-fg); }
+.pt-score.score-high { background: var(--pass-bg);     color: var(--pass-fg); }
+.pt-criterion-id {
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  background: var(--bg-alt);
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  color: var(--ink);
+}
+.pt-dim-title {
+  font-family: var(--sans);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.pt-card p { margin: 0.35rem 0; line-height: 1.55; }
+.pt-anchor { font-size: 0.94rem; color: var(--muted); }
+.pt-consequence { font-size: 1rem; }
+.pt-action { font-size: 1rem; }
+.pt-framework-ref {
+  margin-top: 0.6rem !important;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--rule);
+  font-size: 0.85rem;
+}
+.pt-framework-ref code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  background: var(--bg-alt);
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+}
+.pt-evidence {
+  margin-top: 0.5rem;
+  padding-left: 1.2rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.pt-evidence code { font-family: var(--mono); font-size: 0.82em; }
+
 /* RSF v1.0 assessment block — anchored scoring view */
 .rsf-assessment {
   background: var(--surface); border-radius: 10px; box-shadow: var(--shadow);
@@ -578,6 +646,8 @@ def _render_section(section, *, narrator: str = "deterministic") -> str:
         body = _render_claims(section)
     elif kind == "remediation_table":
         body = _render_tasks_table(section)
+    elif kind == "persona_translation":
+        body = _render_persona_translation(section)
     else:
         body = _render_prose(section)
 
@@ -592,6 +662,51 @@ def _render_section(section, *, narrator: str = "deterministic") -> str:
   {body}
 </section>
 """
+
+
+def _render_persona_translation(section) -> str:
+    """Render the persona-contextual translation of RSF top-5 findings.
+
+    Each item maps an RSF sub-criterion to the persona's lens with a
+    persona-specific consequence + action + framework citation. The
+    rendering is deliberately compact — one card per finding, with the
+    score badge prominent so the reader sees the rubric anchor first.
+    """
+    items = section.data.get("items") or []
+    if not items:
+        return '<p class="muted">No real-anchor RSF findings to translate.</p>'
+
+    cards: list[str] = []
+    for item in items:
+        score = int(item["score"])
+        score_class = (
+            "score-zero" if score == 0
+            else "score-low" if score <= 2
+            else "score-mid" if score <= 3
+            else "score-high"
+        )
+        evidence_html = ""
+        if item.get("evidence"):
+            ev_items = "".join(
+                f"<li><code>{_esc(e)}</code></li>" for e in item["evidence"]
+            )
+            evidence_html = f'<ul class="pt-evidence">{ev_items}</ul>'
+        cards.append(f"""
+<article class="pt-card">
+  <header class="pt-card-head">
+    <span class="pt-score {score_class}">{score}/5</span>
+    <code class="pt-criterion-id">{_esc(item["criterion_id"])}</code>
+    <span class="pt-dim-title">{_esc(item["dimension_title"])}</span>
+  </header>
+  <p class="pt-anchor"><strong>RSF level anchor matched:</strong> <em>{_esc(item["level_anchor_rationale"])}</em></p>
+  <p class="pt-consequence"><strong>What this means here:</strong> {_esc(item["consequence"])}</p>
+  <p class="pt-action"><strong>What to do:</strong> {_esc(item["action"])}</p>
+  <p class="pt-framework-ref"><strong>Published framework:</strong> <code>{_esc(item["framework_ref"])}</code></p>
+  {evidence_html}
+</article>
+""")
+
+    return '<div class="persona-translation">' + "".join(cards) + "</div>"
 
 
 def _render_prose(section) -> str:
